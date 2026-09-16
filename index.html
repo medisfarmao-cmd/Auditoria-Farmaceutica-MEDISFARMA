@@ -39,6 +39,12 @@ body{
   line-height:1.45;
 }
 #app{max-width:980px;margin:0 auto;padding:0 0 80px;}
+@media (min-width:1200px){
+  #app{max-width:1600px;}
+}
+@media (min-width:1900px){
+  #app{max-width:92vw;}
+}
 
 /* ---------- Header / brand bar ---------- */
 .brandbar{
@@ -3973,8 +3979,8 @@ async function renderControl(){
                 <td>${a.enviadaAt ? new Date(a.enviadaAt).toLocaleDateString('es-CO') : "—"}</td>
                 ${isAdmin ? `<td style="white-space:nowrap;">
                   <button class="btn btn-ghost btn-sm" onclick="AuditReview.open('${a.id}')">Ver acta</button>
-                  <button class="btn btn-primary btn-sm" onclick="AuditReview.approve('${a.id}')">Aprobar</button>
-                  <button class="btn btn-danger btn-sm" onclick="AuditReview.reject('${a.id}')">Rechazar</button>
+                  <button class="btn btn-primary btn-sm" onclick="AuditReview.approve('${a.id}')">Aceptada</button>
+                  <button class="btn btn-danger btn-sm" onclick="AuditReview.reject('${a.id}')">Volver a realizar</button>
                 </td>` : ""}
               </tr>`;
             }).join("") || `<tr><td colspan="${isAdmin?7:6}" style="color:var(--ink-soft);">No hay actas pendientes de revisión.</td></tr>`}
@@ -4479,6 +4485,7 @@ function renderCronograma(){
       ${!hasStorage ? `<p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">Nota: el guardado no está disponible en este entorno; estos datos no se conservarán al cerrar.</p>` : ""}
     </div>
   `;
+  Cronograma.refreshPointOptions();
 }
 
 function distribuirDiasEquilibrado(diasDisponibles, cantidad){
@@ -4629,7 +4636,10 @@ const Cronograma = {
     const daysInMonth = new Date(year, monthIndex+1, 0).getDate();
     let totalCreated = 0, totalSkipped = 0;
 
-    for(const sup of DB.supervisores){
+    const isAdmin = SESSION && SESSION.role==="admin";
+    const supervisoresAProgramar = isAdmin ? DB.supervisores : DB.supervisores.filter(s=>s.id===SESSION.id);
+
+    for(const sup of supervisoresAProgramar){
       const allPts = pointsOfSupervisor(sup.id);
       if(allPts.length===0) continue;
       const candidatePts = allPts.filter(p=>!alreadyScheduledPoints.has(p.id));
