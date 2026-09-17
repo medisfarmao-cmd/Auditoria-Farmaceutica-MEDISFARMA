@@ -678,6 +678,8 @@ canvas.sigpad{
           <button class="btn btn-ghost" onclick="window.print()">Imprimir</button>
           <button class="btn btn-primary" id="btnSubmitReview" onclick="ActaFlow.submitForReview()">📤 Enviar para revisión</button>
           <button class="btn btn-ghost" id="btnViewPlan" onclick="ActaFlow.goToPlan()">📋 Ver plan de mejora</button>
+          <button class="btn btn-primary hidden" id="btnAcceptActa" onclick="AuditReview.approve(current.id)">✅ Aceptada</button>
+          <button class="btn btn-danger hidden" id="btnRedoActa" onclick="AuditReview.reject(current.id)">↩ Volver a realizar</button>
           <span id="reviewStatusBadge"></span>
         </div>
         <div class="view">
@@ -3623,6 +3625,8 @@ const ActaFlow = {
     const planBtn = document.getElementById("btnViewPlan");
     const editBtn = document.getElementById("btnBackToEdit");
     const backPuntoBtn = document.getElementById("btnBackToPunto");
+    const acceptBtn = document.getElementById("btnAcceptActa");
+    const redoBtn = document.getElementById("btnRedoActa");
     if(!badge || !current) return;
     ensureReviewFields(current);
     const estado = current.estadoRevision || "Borrador";
@@ -3646,6 +3650,10 @@ const ActaFlow = {
     if(backPuntoBtn) backPuntoBtn.classList.toggle("hidden", !readOnly);
     if(submitBtn) submitBtn.classList.toggle("hidden", readOnly);
     if(planBtn) planBtn.classList.toggle("hidden", readOnly);
+    // Aceptada / Volver a realizar: solo el administrador, y solo mientras esté pendiente de revisión
+    const puedeResolver = SESSION && SESSION.role==="admin" && estado==="Enviada";
+    if(acceptBtn) acceptBtn.classList.toggle("hidden", !puedeResolver);
+    if(redoBtn) redoBtn.classList.toggle("hidden", !puedeResolver);
   },
   async submitForReview(){
     if(!current) return;
@@ -3715,6 +3723,10 @@ const AuditReview = {
       });
     }
     renderControl();
+    if(document.getElementById("view-acta") && !document.getElementById("view-acta").classList.contains("hidden")){
+      ActaFlow.updateStatusUI();
+      setTimeout(()=>{ App.showMain("notificaciones"); }, 700);
+    }
   },
   async reject(auditId){
     const comentario = prompt("Motivo del rechazo (lo verá el supervisor que envió el acta):", "");
@@ -3739,6 +3751,10 @@ const AuditReview = {
       });
     }
     renderControl();
+    if(document.getElementById("view-acta") && !document.getElementById("view-acta").classList.contains("hidden")){
+      ActaFlow.updateStatusUI();
+      setTimeout(()=>{ App.showMain("notificaciones"); }, 700);
+    }
   }
 };
 
