@@ -60,11 +60,13 @@ body{
   position:absolute; right:-40px; top:-60px;
   width:220px;height:220px;border-radius:50%;
   background:radial-gradient(circle,rgba(133,194,38,.16),transparent 70%);
+  pointer-events:none;
 }
 .brandbar::before{
   content:"";
   position:absolute; left:0; right:0; bottom:0; height:4px;
   background:linear-gradient(90deg,var(--lime-600),var(--teal-500),var(--lime-600));
+  pointer-events:none;
 }
 .brand-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .brand-left{display:flex;align-items:center;gap:14px;}
@@ -727,11 +729,13 @@ canvas.sigpad{
         <div class="subnav no-print">
           <button class="subtab active" data-dirsub="puntos" onclick="App.showDirectorSub('puntos')">Creación de puntos</button>
           <button class="subtab" data-dirsub="supervisores" onclick="App.showDirectorSub('supervisores')">Gestión de supervisores</button>
+          <button class="subtab" data-dirsub="indicadores" onclick="App.showDirectorSub('indicadores')">Indicador supervisores</button>
           <button class="subtab" data-dirsub="passwords" onclick="App.showDirectorSub('passwords')">Gestión de contraseñas</button>
           <button class="subtab" data-dirsub="backup" onclick="App.showDirectorSub('backup')">Copias de seguridad</button>
         </div>
         <div class="view" id="dirsub-puntos"></div>
         <div class="view hidden" id="dirsub-supervisores"></div>
+        <div class="view hidden" id="dirsub-indicadores"></div>
         <div class="view hidden" id="dirsub-passwords"></div>
         <div class="view hidden" id="dirsub-backup"></div>
       </div>
@@ -1191,6 +1195,7 @@ const MASTER_KEYS = {
   puntos: "master:puntos",
   visitas: "master:visitas",
   hallazgos: "master:hallazgos",
+  hallazgosEliminados: "master:hallazgosEliminados",
   config: "master:config",
   docTypes: "master:docTypes",
   documentos: "master:documentos",
@@ -1203,7 +1208,7 @@ const MASTER_KEYS = {
   activos: "master:activosFijos"
 };
 
-let DB = { supervisores:[], puntos:[], visitas:[], hallazgos:[], config:{}, docTypes:[], documentos:[], instrumentos:[], lecturas:[], solicitudes:[], audits:[], notificaciones:[], limpieza:[], equipos:[], activos:[] };
+let DB = { supervisores:[], puntos:[], visitas:[], hallazgos:[], hallazgosEliminados:[], config:{}, docTypes:[], documentos:[], instrumentos:[], lecturas:[], solicitudes:[], audits:[], notificaciones:[], limpieza:[], equipos:[], activos:[] };
 let SESSION = null; // {role:'admin'|'supervisor'|'punto', id:string|null, nombre:string}
 
 function uid(prefix){
@@ -1484,6 +1489,7 @@ async function loadAllDB(){
   DB.puntos = await loadMaster(MASTER_KEYS.puntos, false);
   DB.visitas = await loadMaster(MASTER_KEYS.visitas, false);
   DB.hallazgos = await loadMaster(MASTER_KEYS.hallazgos, false);
+  DB.hallazgosEliminados = await loadMaster(MASTER_KEYS.hallazgosEliminados, false);
   DB.config = await loadMaster(MASTER_KEYS.config, true);
   if(!DB.config || typeof DB.config !== "object" || Array.isArray(DB.config)) DB.config = {};
   if(DB.config.adminPin===undefined) DB.config.adminPin = "";
@@ -1608,7 +1614,8 @@ const Backup = {
         solicitudes: DB.solicitudes,
         limpieza: DB.limpieza,
         equipos: DB.equipos,
-        activos: DB.activos
+        activos: DB.activos,
+        hallazgosEliminados: DB.hallazgosEliminados
       }
     };
     try{
@@ -1650,6 +1657,7 @@ const Backup = {
       DB.limpieza = Array.isArray(d.limpieza) ? d.limpieza : [];
       DB.equipos = Array.isArray(d.equipos) ? d.equipos : [];
       DB.activos = Array.isArray(d.activos) ? d.activos : [];
+      DB.hallazgosEliminados = Array.isArray(d.hallazgosEliminados) ? d.hallazgosEliminados : [];
 
       if(hasStorage){
         for(const a of DB.audits){ await saveAudit(a); }
@@ -1666,6 +1674,7 @@ const Backup = {
         await saveMaster(MASTER_KEYS.limpieza, DB.limpieza);
         await saveMaster(MASTER_KEYS.equipos, DB.equipos);
         await saveMaster(MASTER_KEYS.activos, DB.activos);
+        await saveMaster(MASTER_KEYS.hallazgosEliminados, DB.hallazgosEliminados);
       }
 
       alert(`Copia de seguridad restaurada correctamente: ${DB.audits.length} auditorías, ${DB.supervisores.length} supervisores, ${DB.puntos.length} puntos.${!hasStorage ? " (Nota: el guardado automático no está disponible en este entorno, así que se conservará solo mientras no cierres esta pestaña.)" : ""}`);
@@ -2864,6 +2873,7 @@ async function syncHallazgos(){
           const r = audit.ratings[it.n];
           if(r === "AR" || r === "I"){
           const id = audit.id + "-" + it.n;
+          if(DB.hallazgosEliminados.includes(id)) return; // eliminado manualmente, no volver a generarlo
           seenIds.add(id);
           const point = DB.puntos.find(p=>p.id===audit.header.puntoId);
           const base = {
@@ -4211,8 +4221,11 @@ const Supervisores = {
     const mySupervisorId = SESSION && SESSION.role==="supervisor" ? SESSION.id : null;
     const filterSel = document.getElementById("filterPointSupervisor");
     const filterVal = filterSel ? filterSel.value : "";
+    const searchInput = document.getElementById("filterPointSearch");
+    const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : "";
     let pts = DB.puntos.filter(p=> !filterVal || p.supervisorId===filterVal);
     if(!isAdmin && mySupervisorId) pts = pts.filter(p=>p.supervisorId===mySupervisorId);
+    if(searchVal) pts = pts.filter(p=> (p.nombre||"").toLowerCase().includes(searchVal) || (p.codigo||"").toLowerCase().includes(searchVal));
     wrap.innerHTML = `
       <table class="datatable">
         <thead><tr><th>Código</th><th>Punto</th><th>Ciudad / Depto.</th><th>Tipo estab.</th><th>Clasificación</th><th>Supervisor</th><th>Documentación</th><th>Solicitud</th><th></th></tr></thead>
@@ -4712,14 +4725,16 @@ const Cronograma = {
    ========================================================= */
 async function renderHallazgos(){
   const el = document.getElementById("sub-hallazgos");
+  const filterEstadoPrev = document.getElementById("ha_filterEstado") ? document.getElementById("ha_filterEstado").value : "";
+  const filterSupPrev = document.getElementById("ha_filterSupervisor") ? document.getElementById("ha_filterSupervisor").value : "";
   el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Sincronizando hallazgos desde las auditorías…</p>`;
   await syncHallazgos();
 
   const isAdmin = SESSION && SESSION.role==="admin";
   const mySupervisorId = SESSION && SESSION.role==="supervisor" ? SESSION.id : null;
 
-  const filterEstado = document.getElementById("ha_filterEstado") ? document.getElementById("ha_filterEstado").value : "";
-  const filterSup = mySupervisorId || (document.getElementById("ha_filterSupervisor") ? document.getElementById("ha_filterSupervisor").value : "");
+  const filterEstado = filterEstadoPrev;
+  const filterSup = mySupervisorId || filterSupPrev;
 
   let baseList = mySupervisorId ? DB.hallazgos.filter(h=>h.supervisorId===mySupervisorId) : DB.hallazgos;
 
@@ -4756,7 +4771,7 @@ async function renderHallazgos(){
           <thead><tr>
             <th>Punto</th><th>Supervisor</th><th>Ítem</th><th>Criticidad</th><th>Calificación</th><th>Observación</th>
             <th>Normativa</th><th>Acción sugerida</th>
-            <th>Estado</th><th>Responsable</th><th>Fecha compromiso</th><th>Notas de gestión</th><th>Subsanación</th>
+            <th>Estado</th><th>Responsable</th><th>Fecha compromiso</th><th>Notas de gestión</th><th>Subsanación</th>${isAdmin?"<th></th>":""}
           </tr></thead>
           <tbody>
             ${list.map(h=>`
@@ -4779,8 +4794,9 @@ async function renderHallazgos(){
                 <td><input type="date" value="${esc(h.fechaCompromiso)}" onchange="Hallazgos.update('${h.id}','fechaCompromiso', this.value)"></td>
                 <td><textarea rows="2" onchange="Hallazgos.update('${h.id}','notasGestion', this.value)">${esc(h.notasGestion)}</textarea></td>
                 <td style="min-width:180px;">${renderSubsanacionCell(h, isAdmin)}</td>
+                ${isAdmin?`<td><button class="btn btn-danger btn-sm" onclick="Hallazgos.eliminar('${h.id}')">Eliminar</button></td>`:""}
               </tr>${hallazgosFormAbierto.has(h.id) ? `
-              <tr id="hz-subform-${h.id}"><td colspan="13" style="background:var(--teal-100);padding:12px 16px;">
+              <tr id="hz-subform-${h.id}"><td colspan="${isAdmin?14:13}" style="background:var(--teal-100);padding:12px 16px;">
                 <strong style="font-size:12.5px;">Adjuntar evidencia de subsanación</strong>
                 <div class="inline-form" style="margin-top:6px;">
                   <label class="f">Archivo (foto, PDF, etc.)<input type="file" id="hz_file_${h.id}"></label>
@@ -4789,7 +4805,7 @@ async function renderHallazgos(){
                 <button class="btn btn-primary btn-sm" onclick="Hallazgos.enviarSubsanacion('${h.id}')">Enviar para aprobación</button>
                 <button class="btn btn-ghost btn-sm" onclick="Hallazgos.toggleSubsanar('${h.id}')">Cancelar</button>
               </td></tr>` : ""}
-            `).join("") || `<tr><td colspan="13" style="color:var(--ink-soft);">No hay hallazgos registrados con este filtro. Los hallazgos se generan automáticamente cuando una auditoría califica un ítem como "Con requerimiento" o "Inaceptable".</td></tr>`}
+            `).join("") || `<tr><td colspan="${isAdmin?14:13}" style="color:var(--ink-soft);">No hay hallazgos registrados con este filtro. Los hallazgos se generan automáticamente cuando una auditoría califica un ítem como "Con requerimiento" o "Inaceptable".</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -4831,6 +4847,16 @@ const Hallazgos = {
     if(!h) return;
     h[field] = value;
     await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+  },
+  async eliminar(id){
+    const h = DB.hallazgos.find(x=>x.id===id);
+    if(!h) return;
+    if(!confirm(`¿Eliminar este hallazgo de forma permanente?\n\nPunto: ${h.puntoNombre}\nÍtem: ${h.itemNum}\n\nEsta acción no se puede deshacer, y no volverá a generarse automáticamente aunque la auditoría de origen siga existiendo.`)) return;
+    DB.hallazgos = DB.hallazgos.filter(x=>x.id!==id);
+    if(!DB.hallazgosEliminados.includes(id)) DB.hallazgosEliminados.push(id);
+    await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+    await saveMaster(MASTER_KEYS.hallazgosEliminados, DB.hallazgosEliminados);
+    renderHallazgos();
   },
   toggleSubsanar(id){
     if(hallazgosFormAbierto.has(id)) hallazgosFormAbierto.delete(id); else hallazgosFormAbierto.add(id);
@@ -5954,15 +5980,35 @@ function renderMapaPuntos(){
   const mySupervisorId = SESSION && SESSION.role==="supervisor" ? SESSION.id : null;
   const puntos = DB.puntos.filter(p=> isAdmin || !mySupervisorId || p.supervisorId===mySupervisorId);
   const conCoord = puntos.filter(p=>p.lat && p.lng && !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng)));
+  const sinCoord = puntos.filter(p=>!(p.lat && p.lng && !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng))));
 
   el.innerHTML = `
     <div class="panel">
       <h3>Mapa de puntos ${isAdmin ? "— todo el país" : "— mis puntos asignados"}</h3>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Ubicación geográfica de cada punto de dispensación, coloreada por supervisor a cargo. Toca un punto en el mapa para ver sus datos.</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Ubicación geográfica de cada punto de dispensación, coloreada por supervisor a cargo. Toca un punto en el mapa para ver sus datos. (${conCoord.length} de ${puntos.length} puntos tienen coordenadas registradas.)</p>
       <div id="mapaPuntosMap" style="height:420px;border-radius:10px;overflow:hidden;"></div>
       <div class="map-legend" id="mapaPuntosLegend" style="margin-top:10px;"></div>
-      ${conCoord.length < puntos.length ? `<p style="font-size:11.5px;color:var(--amber);margin-top:8px;">${puntos.length-conCoord.length} punto(s) sin coordenadas registradas no aparecen en el mapa.</p>` : ""}
     </div>
+    ${sinCoord.length>0 ? `
+    <div class="panel" style="border-color:var(--amber);">
+      <h3 style="color:var(--amber);">⚠️ Puntos sin coordenadas (${sinCoord.length})</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Estos puntos no aparecen en el mapa porque les falta latitud/longitud. ${isAdmin ? `Ábrelos desde Director → Creación de puntos y usa "📍 Ubicar dirección" para completarlos.` : `Solo el administrador puede corregir la ubicación de un punto — avísale para que los complete.`}</p>
+      <div class="table-wrap">
+        <table class="datatable">
+          <thead><tr><th>Código</th><th>Punto</th><th>Ciudad / Depto.</th><th>Supervisor</th>${isAdmin?"<th></th>":""}</tr></thead>
+          <tbody>
+            ${sinCoord.map(p=>`
+              <tr>
+                <td>${esc(p.codigo)||"—"}</td>
+                <td>${esc(p.nombre)}</td>
+                <td>${esc(p.ciudad)||"—"}${p.departamento?", "+esc(p.departamento):""}</td>
+                <td>${esc(supervisorNombre(p.supervisorId))||"—"}</td>
+                ${isAdmin ? `<td><button class="btn btn-ghost btn-sm" onclick="App.showMain('director');App.showDirectorSub('puntos');setTimeout(()=>Supervisores.openEditPoint('${p.id}'),80);">Corregir</button></td>` : ""}
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ""}
     <div class="panel">
       <h3>Directorio de puntos de dispensación</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Descarga la ficha completa de ${isAdmin?"todos los puntos":"tus puntos asignados"} en un archivo de Excel, lista para imprimir o compartir. No incluye el PIN de acceso de ningún punto.</p>
@@ -6200,6 +6246,7 @@ function renderDirectorPuntos(){
     <div class="panel">
       <h3>Puntos registrados</h3>
       <div class="filters-row">
+        <input type="text" id="filterPointSearch" placeholder="🔎 Buscar por nombre o código…" oninput="Supervisores.renderPointsTable()" style="min-width:240px;">
         <select id="filterPointSupervisor" onchange="Supervisores.renderPointsTable()">
           <option value="">Todos los supervisores</option>
           ${DB.supervisores.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}
@@ -6492,6 +6539,176 @@ function renderDirectorComplianceHtml(){
 }
 
 /* =========================================================
+   DIRECTOR · INDICADOR SUPERVISORES (dashboard completo)
+   ========================================================= */
+function renderDirectorIndicadores(){
+  const el = document.getElementById("dirsub-indicadores");
+  if(!el) return;
+
+  const filterSel = document.getElementById("ind_filterSupervisor");
+  const filterSup = filterSel ? filterSel.value : "";
+
+  const totalPuntos = DB.puntos.length;
+  const conteoNacional = {A:0,B:0,C:0};
+  DB.puntos.forEach(p=>{ conteoNacional[clasificarPunto(p)]++; });
+
+  const auditedIds = new Set(DB.audits.filter(a=>ratedItemsCount(a.ratings)===totalItemsCount()).map(a=>a.header.puntoId));
+  const visitados = DB.puntos.filter(p=>auditedIds.has(p.id)).length;
+  const porVisitar = totalPuntos - visitados;
+
+  const totalHallazgos = DB.hallazgos.length;
+  const hzAbiertos = DB.hallazgos.filter(h=>h.estado==="Abierto").length;
+  const hzGestion = DB.hallazgos.filter(h=>h.estado==="En gestión").length;
+  const hzSubsanados = DB.hallazgos.filter(h=>h.estado==="Subsanado").length;
+
+  const subsanadosConFechas = DB.hallazgos.filter(h=>h.estado==="Subsanado" && h.fechaDeteccion && h.fechaCierre);
+  const tiempoPromedio = subsanadosConFechas.length
+    ? Math.round(subsanadosConFechas.reduce((s,h)=>{
+        const d1 = new Date(h.fechaDeteccion+"T00:00:00"), d2 = new Date(h.fechaCierre+"T00:00:00");
+        return s + Math.max(0, Math.round((d2-d1)/86400000));
+      },0) / subsanadosConFechas.length)
+    : null;
+
+  const totalActasPendientes = DB.audits.filter(a=>a.estadoRevision==="Enviada").length;
+
+  const filas = DB.supervisores.map(s=>{
+    const pts = pointsOfSupervisor(s.id);
+    const conteoTipo = {A:0,B:0,C:0};
+    pts.forEach(p=>conteoTipo[clasificarPunto(p)]++);
+    const visitadosSup = pts.filter(p=>auditedIds.has(p.id)).length;
+    const hzSup = DB.hallazgos.filter(h=>h.supervisorId===s.id);
+    const compDocsSup = pts.length ? Math.round(pts.reduce((sum,p)=>sum+pointCompliance(p.id).pct,0)/pts.length) : 0;
+    const pendientesActas = DB.audits.filter(a=>a.estadoRevision==="Enviada" && a.header.supervisorId===s.id).length;
+    return {
+      s, totalPts:pts.length, conteoTipo,
+      visitadosSup, porVisitarSup: pts.length-visitadosSup,
+      pctVisitado: pts.length ? Math.round((visitadosSup/pts.length)*100) : 0,
+      hzTotal:hzSup.length,
+      hzAbiertosSup: hzSup.filter(h=>h.estado==="Abierto").length,
+      hzGestionSup: hzSup.filter(h=>h.estado==="En gestión").length,
+      hzSubsanadosSup: hzSup.filter(h=>h.estado==="Subsanado").length,
+      compDocsSup, pendientesActas
+    };
+  }).sort((a,b)=>b.totalPts-a.totalPts);
+
+  const hallazgosFiltrados = (filterSup ? DB.hallazgos.filter(h=>h.supervisorId===filterSup) : DB.hallazgos)
+    .slice().sort((a,b)=>(b.fechaDeteccion||"").localeCompare(a.fechaDeteccion||""));
+
+  const barColor = (pct) => pct>=80 ? "var(--green)" : pct>=50 ? "var(--amber)" : "var(--red)";
+  const claseColor = {A:"var(--red)", B:"var(--amber)", C:"var(--green)"};
+  const pctOf = (n,total) => total ? Math.round((n/total)*100) : 0;
+
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-num">${totalPuntos}</div><div class="kpi-lbl">Puntos a nivel nacional</div></div>
+      <div class="kpi-card"><div class="kpi-num" style="color:var(--green);">${visitados}</div><div class="kpi-lbl">Puntos visitados</div></div>
+      <div class="kpi-card"><div class="kpi-num" style="color:${porVisitar>0?'var(--amber)':'var(--ink)'};">${porVisitar}</div><div class="kpi-lbl">Puntos por visitar</div></div>
+      <div class="kpi-card"><div class="kpi-num" style="color:${totalActasPendientes>0?'var(--amber)':'var(--ink)'};">${totalActasPendientes}</div><div class="kpi-lbl">Actas pendientes de revisión</div></div>
+      <div class="kpi-card"><div class="kpi-num">${tiempoPromedio!==null?tiempoPromedio+" días":"—"}</div><div class="kpi-lbl">Tiempo promedio de subsanación</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>🏷️ Clasificación de puntos a nivel nacional</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Sobre el total de ${totalPuntos} punto(s), según los umbrales configurados en "Creación de puntos".</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        ${["A","B","C"].map(t=>`
+          <div style="flex:1;min-width:140px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><strong>Tipo ${t}</strong><span>${conteoNacional[t]} (${pctOf(conteoNacional[t],totalPuntos)}%)</span></div>
+            <div style="background:var(--gray-bg);border-radius:8px;height:14px;overflow:hidden;">
+              <div style="width:${pctOf(conteoNacional[t],totalPuntos)}%;height:100%;background:${claseColor[t]};"></div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>🚩 Hallazgos a nivel nacional</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">${totalHallazgos} hallazgo(s) en total.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:140px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><strong>Abiertos</strong><span>${hzAbiertos} (${pctOf(hzAbiertos,totalHallazgos)}%)</span></div>
+          <div style="background:var(--gray-bg);border-radius:8px;height:14px;overflow:hidden;"><div style="width:${pctOf(hzAbiertos,totalHallazgos)}%;height:100%;background:var(--red);"></div></div>
+        </div>
+        <div style="flex:1;min-width:140px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><strong>En gestión</strong><span>${hzGestion} (${pctOf(hzGestion,totalHallazgos)}%)</span></div>
+          <div style="background:var(--gray-bg);border-radius:8px;height:14px;overflow:hidden;"><div style="width:${pctOf(hzGestion,totalHallazgos)}%;height:100%;background:var(--amber);"></div></div>
+        </div>
+        <div style="flex:1;min-width:140px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><strong>Subsanados</strong><span>${hzSubsanados} (${pctOf(hzSubsanados,totalHallazgos)}%)</span></div>
+          <div style="background:var(--gray-bg);border-radius:8px;height:14px;overflow:hidden;"><div style="width:${pctOf(hzSubsanados,totalHallazgos)}%;height:100%;background:var(--green);"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📋 Detalle por supervisor</h3>
+      <div class="table-wrap">
+        <table class="datatable">
+          <thead><tr>
+            <th>Supervisor</th><th>Puntos</th><th>Tipo A</th><th>Tipo B</th><th>Tipo C</th>
+            <th>Visitados / Por visitar</th><th>% Visitado</th>
+            <th>Hallazgos (Abiertos / Gestión / Subsanados)</th><th>% Documentación</th><th>Actas pendientes</th>
+          </tr></thead>
+          <tbody>
+            ${filas.map(f=>`
+              <tr>
+                <td><strong>${esc(f.s.nombre)}</strong></td>
+                <td>${f.totalPts}</td>
+                <td>${f.conteoTipo.A}</td>
+                <td>${f.conteoTipo.B}</td>
+                <td>${f.conteoTipo.C}</td>
+                <td>${f.visitadosSup} / ${f.porVisitarSup}</td>
+                <td style="min-width:120px;">
+                  <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:2px;"><span>${f.pctVisitado}%</span></div>
+                  <div style="background:var(--gray-bg);border-radius:8px;height:8px;overflow:hidden;"><div style="width:${f.pctVisitado}%;height:100%;background:${barColor(f.pctVisitado)};"></div></div>
+                </td>
+                <td>
+                  <span style="color:var(--red);font-weight:700;">${f.hzAbiertosSup}</span> /
+                  <span style="color:var(--amber);font-weight:700;">${f.hzGestionSup}</span> /
+                  <span style="color:var(--green);font-weight:700;">${f.hzSubsanadosSup}</span>
+                  <span style="color:var(--ink-soft);"> (${f.hzTotal} total)</span>
+                </td>
+                <td>${f.compDocsSup}%</td>
+                <td>${f.pendientesActas>0 ? `<span class="chip-mini chip-pendiente">${f.pendientesActas}</span>` : "0"}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="10" style="color:var(--ink-soft);">No hay supervisores registrados todavía.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Detalle de hallazgos</h3>
+      <div class="filters-row">
+        <select id="ind_filterSupervisor" onchange="renderDirectorIndicadores()">
+          <option value="">Todos los supervisores</option>
+          ${DB.supervisores.map(s=>`<option value="${s.id}" ${filterSup===s.id?"selected":""}>${esc(s.nombre)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="datatable">
+          <thead><tr><th>Punto</th><th>Supervisor</th><th>Ítem</th><th>Calificación</th><th>Estado</th><th>Detectado</th><th>Cerrado</th></tr></thead>
+          <tbody>
+            ${hallazgosFiltrados.map(h=>`
+              <tr>
+                <td>${esc(h.puntoNombre)}</td>
+                <td>${esc(supervisorNombre(h.supervisorId))}</td>
+                <td>${esc(h.itemNum)}</td>
+                <td>${h.rating==="I" ? '<span class="rate-badge rate-I">Inaceptable</span>' : '<span class="rate-badge rate-AR">Con requerimiento</span>'}</td>
+                <td><span class="chip-mini ${h.estado==='Subsanado'?'chip-aprobado':h.estado==='En gestión'?'chip-pendiente':'chip-rechazado'}">${esc(h.estado)}</span></td>
+                <td>${esc(h.fechaDeteccion)||"—"}</td>
+                <td>${esc(h.fechaCierre)||"—"}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="7" style="color:var(--ink-soft);">No hay hallazgos con este filtro.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* =========================================================
    SUPERVISORES · TEMPERATURA (trazabilidad y alertas)
    ========================================================= */
 function renderTemperatura(){
@@ -6680,12 +6897,13 @@ const App = {
   currentDirSub: "puntos",
   showDirectorSub(sub){
     this.currentDirSub = sub;
-    ["puntos","supervisores","passwords","backup"].forEach(s=>{
+    ["puntos","supervisores","indicadores","passwords","backup"].forEach(s=>{
       document.getElementById("dirsub-"+s).classList.toggle("hidden", s!==sub);
     });
     document.querySelectorAll('[data-dirsub]').forEach(b=>b.classList.toggle("active", b.dataset.dirsub===sub));
     if(sub==="puntos") renderDirectorPuntos();
     if(sub==="supervisores") renderDirectorSupervisoresTab();
+    if(sub==="indicadores") renderDirectorIndicadores();
     if(sub==="passwords") renderDirectorPasswords();
     if(sub==="backup") renderDirectorBackup();
   },
