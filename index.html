@@ -581,6 +581,7 @@ canvas.sigpad{
               </label>
               <label class="f" id="login_who_wrap">
                 <span id="login_who_label">Selecciona tu nombre</span>
+                <input type="text" id="login_who_search" placeholder="🔎 Escribe para buscar…" oninput="filterSelectOptions('login_who_search','login_who')" style="margin-bottom:6px;">
                 <select id="login_who"></select>
               </label>
               <label class="f" id="login_pin_wrap">
@@ -766,6 +767,7 @@ canvas.sigpad{
           <h3>Punto de dispensación</h3>
           <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Selecciona un punto para registrar su toma de temperatura o cargar sus documentos, igual que lo haría su Director Técnico.</p>
           <label class="f" style="max-width:420px;">Punto de dispensación
+            <input type="text" id="pdisp_search" placeholder="🔎 Buscar punto por nombre o código…" oninput="filterSelectOptions('pdisp_search','pdisp_selector')" style="margin-bottom:6px;">
             <select id="pdisp_selector" onchange="App.selectPuntoDispensacion(this.value)"></select>
           </label>
         </div>
@@ -2618,6 +2620,8 @@ const Auth = {
     const wrap = document.getElementById("login_who_wrap");
     const label = document.getElementById("login_who_label");
     const sel = document.getElementById("login_who");
+    const searchBox = document.getElementById("login_who_search");
+    if(searchBox) searchBox.value = "";
     if(role==="admin"){
       wrap.classList.add("hidden");
     } else if(role==="supervisor"){
@@ -3057,6 +3061,7 @@ function renderForm(){
       <legend>Identificación del establecimiento</legend>
       <div class="field-grid">
         <label class="f" style="grid-column:1/-1;">Punto de dispensación registrado (opcional — autocompleta los datos)
+          <input type="text" id="h_puntoId_search" placeholder="🔎 Buscar punto por nombre o código…" oninput="filterSelectOptions('h_puntoId_search','h_puntoId')" style="margin-bottom:6px;">
           <select id="h_puntoId">
             <option value="">Selección manual (sin vincular a un punto registrado)</option>
             ${DB.puntos.map(p=>`<option value="${p.id}" ${h.puntoId===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""} — ${esc(p.ciudad)}</option>`).join("")}
@@ -3252,6 +3257,18 @@ let saveTimer=null;
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{ saveAudit(current); }, 600);
+}
+
+/* ---- Buscador reutilizable para selects largos (puntos, supervisores) ---- */
+function filterSelectOptions(searchId, selectId){
+  const searchEl = document.getElementById(searchId);
+  const select = document.getElementById(selectId);
+  if(!searchEl || !select) return;
+  const term = searchEl.value.trim().toLowerCase();
+  Array.from(select.options).forEach(opt=>{
+    if(!opt.value){ opt.hidden = false; return; } // deja siempre visible la opción vacía/placeholder
+    opt.hidden = !!term && !opt.textContent.toLowerCase().includes(term);
+  });
 }
 
 function esc(s){
@@ -4454,6 +4471,7 @@ function renderCronograma(){
           </select>` : `<input type="text" value="${esc(supervisorNombre(mySupervisorId))}" disabled><input type="hidden" id="vi_supervisor" value="${mySupervisorId}">`}
         </label>
         <label class="f">Punto de dispensación
+          <input type="text" id="vi_punto_search" placeholder="🔎 Buscar punto…" oninput="filterSelectOptions('vi_punto_search','vi_punto')" style="margin-bottom:6px;">
           <select id="vi_punto"><option value="">${isAdmin ? "Selecciona un supervisor primero…" : "Selecciona un punto…"}</option></select>
         </label>
         <label class="f">Fecha<input type="date" id="vi_fecha"></label>
@@ -4589,6 +4607,8 @@ const Cronograma = {
   refreshPointOptions(){
     const supId = document.getElementById("vi_supervisor").value;
     const sel = document.getElementById("vi_punto");
+    const searchBox = document.getElementById("vi_punto_search");
+    if(searchBox) searchBox.value = "";
     const pts = pointsOfSupervisor(supId);
     sel.innerHTML = pts.length
       ? pts.map(p=>`<option value="${p.id}">${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""}</option>`).join("")
@@ -4990,6 +5010,7 @@ async function renderDocumentos(){
       <h3>Cumplimiento documental por punto</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Los administradores de cada punto suben aquí su documentación; ${isAdmin ? "los supervisores la revisan y tú puedes ver el indicador de cumplimiento" : "revísala y márcala como aprobada o rechazada"}.</p>
       <div class="filters-row">
+        <input type="text" id="doc_filterPoint_search" placeholder="🔎 Buscar punto…" oninput="filterSelectOptions('doc_filterPoint_search','doc_filterPoint')">
         <select id="doc_filterPoint" onchange="renderDocumentos()">
           <option value="">Todos los puntos${!isAdmin?" (de mi equipo)":""}</option>
           ${pts.map(p=>`<option value="${p.id}" ${filterVal===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""}</option>`).join("")}
@@ -5927,6 +5948,7 @@ function renderActivosGeneral(){
       <h3>Activos fijos ${isAdmin ? "— todos los puntos de dispensación" : "— mis puntos asignados"}</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Se actualiza automáticamente a medida que cada punto registra sus activos, con código serial único por punto.</p>
       <div class="filters-row">
+        <input type="text" id="act_filterPoint_search" placeholder="🔎 Buscar punto…" oninput="filterSelectOptions('act_filterPoint_search','act_filterPoint')">
         <select id="act_filterPoint" onchange="renderActivosGeneral()">
           <option value="">Todos los puntos${!isAdmin?" (de mi equipo)":""}</option>
           ${DB.puntos.filter(p=> isAdmin || !mySupervisorId || p.supervisorId===mySupervisorId).map(p=>`<option value="${p.id}" ${filterVal===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""}</option>`).join("")}
@@ -6184,6 +6206,7 @@ function renderMantenimientoGeneral(){
       <h3>Cronograma general de mantenimiento</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Se actualiza automáticamente a medida que se registran equipos en cada punto (nevera, congelador, aire acondicionado, ventilador). Cada mantenimiento se reprograma a ${MANTENIMIENTO_INTERVALO_MESES} meses desde la última intervención registrada.</p>
       <div class="filters-row">
+        <input type="text" id="mtto_filterPoint_search" placeholder="🔎 Buscar punto…" oninput="filterSelectOptions('mtto_filterPoint_search','mtto_filterPoint')">
         <select id="mtto_filterPoint" onchange="renderMantenimientoGeneral()">
           <option value="">Todos los puntos</option>
           ${DB.puntos.map(p=>`<option value="${p.id}" ${filterVal===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""}</option>`).join("")}
@@ -6843,6 +6866,7 @@ function renderTemperatura(){
       <h3>Trazabilidad de tomas de temperatura</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Cada instrumento debe tener 2 tomas diarias, <strong>todos los días del mes, incluidos los domingos</strong> (se registran de forma remota aunque el punto no opere), con al menos 2 horas de diferencia. Verde = cumplida y en rango · Ámbar = tomada pero fuera de rango · Rojo = no se tomó.</p>
       <div class="filters-row">
+        <input type="text" id="temp_filterPoint_search" placeholder="🔎 Buscar punto…" oninput="filterSelectOptions('temp_filterPoint_search','temp_filterPoint')">
         <select id="temp_filterPoint" onchange="renderTemperatura()">
           <option value="">Todos los puntos${!isAdmin?" (de mi equipo)":""}</option>
           ${DB.puntos.filter(p=> isAdmin || !mySupervisorId || p.supervisorId===mySupervisorId).map(p=>`<option value="${p.id}" ${filterVal===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""}</option>`).join("")}
