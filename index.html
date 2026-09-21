@@ -1485,8 +1485,16 @@ function updateLocalDriveStatus(){
   }
 }
 
-async function loadAllDB(includeHeavy){
-  if(includeHeavy===undefined) includeHeavy = true;
+async function loadAllDB(level){
+  // Tres niveles, de más frecuente/liviano a menos frecuente/pesado:
+  // "light"  → solo lo que de verdad necesita sentirse en vivo (coordinación entre personas)
+  // "medium" → + config, catálogos y registros que crecen con el tiempo pero rara vez los mira una 2a persona en el momento
+  // "full"   → + auditorías, documentos y soportes de mantenimiento (traen archivos/fotos en base64, lo más pesado)
+  if(level===true) level = "full";
+  if(level===false || level===undefined) level = "full"; // por compatibilidad: sin argumento, carga todo (arranque de la app)
+  const includeHeavy = (level==="full");
+  const includeMedium = (level==="full" || level==="medium");
+
   if(includeHeavy){
     DB.audits = await loadAuditsFromStorage();
   }
@@ -1495,31 +1503,34 @@ async function loadAllDB(includeHeavy){
   DB.visitas = await loadMaster(MASTER_KEYS.visitas, false);
   DB.hallazgos = await loadMaster(MASTER_KEYS.hallazgos, false);
   DB.hallazgosEliminados = await loadMaster(MASTER_KEYS.hallazgosEliminados, false);
-  DB.config = await loadMaster(MASTER_KEYS.config, true);
-  if(!DB.config || typeof DB.config !== "object" || Array.isArray(DB.config)) DB.config = {};
-  if(DB.config.adminPin===undefined) DB.config.adminPin = "";
-  if(!DB.config.clasificacion){
-    DB.config.clasificacion = {
-      usuariosA:500, usuariosB:150,
-      frecuenciaA:1, frecuenciaB:2, frecuenciaC:4
-    };
+  DB.solicitudes = await loadMaster(MASTER_KEYS.solicitudes, false);
+  DB.notificaciones = await loadMaster(MASTER_KEYS.notificaciones, false);
+
+  if(includeMedium){
+    DB.config = await loadMaster(MASTER_KEYS.config, true);
+    if(!DB.config || typeof DB.config !== "object" || Array.isArray(DB.config)) DB.config = {};
+    if(DB.config.adminPin===undefined) DB.config.adminPin = "";
+    if(!DB.config.clasificacion){
+      DB.config.clasificacion = {
+        usuariosA:500, usuariosB:150,
+        frecuenciaA:1, frecuenciaB:2, frecuenciaC:4
+      };
+    }
+    DB.docTypes = await loadMaster(MASTER_KEYS.docTypes, false);
+    if(!DB.docTypes || DB.docTypes.length===0){
+      DB.docTypes = DEFAULT_DOC_TYPE_NAMES.map(nombre=>({id:uid("dt"), nombre}));
+      await saveMaster(MASTER_KEYS.docTypes, DB.docTypes);
+    }
+    DB.instrumentos = await loadMaster(MASTER_KEYS.instrumentos, false);
+    DB.lecturas = await loadMaster(MASTER_KEYS.lecturas, false);
+    DB.limpieza = await loadMaster(MASTER_KEYS.limpieza, false);
+    DB.activos = await loadMaster(MASTER_KEYS.activos, false);
   }
-  DB.docTypes = await loadMaster(MASTER_KEYS.docTypes, false);
-  if(!DB.docTypes || DB.docTypes.length===0){
-    DB.docTypes = DEFAULT_DOC_TYPE_NAMES.map(nombre=>({id:uid("dt"), nombre}));
-    await saveMaster(MASTER_KEYS.docTypes, DB.docTypes);
-  }
+
   if(includeHeavy){
     DB.documentos = await loadMaster(MASTER_KEYS.documentos, false);
     DB.equipos = await loadMaster(MASTER_KEYS.equipos, false);
-  }
-  DB.instrumentos = await loadMaster(MASTER_KEYS.instrumentos, false);
-  DB.lecturas = await loadMaster(MASTER_KEYS.lecturas, false);
-  DB.solicitudes = await loadMaster(MASTER_KEYS.solicitudes, false);
-  DB.notificaciones = await loadMaster(MASTER_KEYS.notificaciones, false);
-  DB.limpieza = await loadMaster(MASTER_KEYS.limpieza, false);
-  DB.activos = await loadMaster(MASTER_KEYS.activos, false);
-  if(includeHeavy){
+
     await seedSyncVerificationData();
   }
 }
@@ -2797,15 +2808,12 @@ function isEditingAuditView(){
   return formVisible || actaVisible || planVisible;
 }
 
-async function refreshCurrentView(forceHeavy){
+async function refreshCurrentView(level){
   if(!SESSION) return;
   if(isEditingAuditView()) return;
   if(isUserTyping()) return;
 
-  // Liviano casi siempre: evita re-descargar auditorías/documentos/equipos (traen fotos en base64)
-  // en cada ciclo, para no disparar el consumo de datos (egress) de Supabase.
-  // Cada varios ciclos sí se hace una recarga completa, para que lo pesado también se termine actualizando.
-  await loadAllDB(!!forceHeavy);
+  await loadAllDB(level || "light");
 
   if(isUserTyping()) return; // por si el foco cambió mientras cargaba
 
@@ -2831,18 +2839,23 @@ async function refreshCurrentView(forceHeavy){
 }
 
 let autoRefreshTickCount = 0;
-const HEAVY_REFRESH_EVERY_N_TICKS = 6; // con AUTO_REFRESH_MS=45s, una recarga completa cada ~4.5 min
+// Con AUTO_REFRESH_MS=45s: "light" cada 45s, "medium" cada ~3 min, "full" (con fotos) cada ~9 min.
+const MEDIUM_REFRESH_EVERY_N_TICKS = 4;
+const FULL_REFRESH_EVERY_N_TICKS = 12;
 
 function startAutoRefresh(){
   if(!hasStorage) return; // sin storage compartido no hay nada que sincronizar
   stopAutoRefresh();
   autoRefreshTimer = setInterval(async ()=>{
     if(isSyncing) return;
+    if(document.visibilityState!=="visible") return; // pestaña en segundo plano: no gastar datos sin que nadie la esté viendo
     isSyncing = true;
     try{
       autoRefreshTickCount++;
-      const heavy = (autoRefreshTickCount % HEAVY_REFRESH_EVERY_N_TICKS === 0);
-      await refreshCurrentView(heavy);
+      let level = "light";
+      if(autoRefreshTickCount % FULL_REFRESH_EVERY_N_TICKS === 0) level = "full";
+      else if(autoRefreshTickCount % MEDIUM_REFRESH_EVERY_N_TICKS === 0) level = "medium";
+      await refreshCurrentView(level);
     }
     catch(e){ console.error("Error en auto-refresco:", e); }
     isSyncing = false;
@@ -2854,7 +2867,7 @@ function stopAutoRefresh(){
 }
 
 document.addEventListener("visibilitychange", ()=>{
-  if(document.visibilityState==="visible" && SESSION) refreshCurrentView();
+  if(document.visibilityState==="visible" && SESSION) refreshCurrentView("light");
 });
 
 /* ---- Sincronización de hallazgos a partir de las auditorías guardadas ---- */
