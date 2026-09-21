@@ -6040,14 +6040,21 @@ function renderMapaPuntos(){
   initMapaPuntosMap(puntos);
 }
 
+const COLOMBIA_CENTER = [4.5, -74.0];
+const COLOMBIA_BOUNDS = [[-4.5, -82.0], [15.5, -66.5]]; // SW, NE — cubre continente + San Andrés y Providencia
+
 function initMapaPuntosMap(puntos){
   const container = document.getElementById("mapaPuntosMap");
   if(!container || typeof L === "undefined") return;
   if(leafletMapaPuntos){ leafletMapaPuntos.remove(); leafletMapaPuntos = null; }
 
   const pts = puntos.filter(p=>p.lat && p.lng && !isNaN(parseFloat(p.lat)) && !isNaN(parseFloat(p.lng)));
-  const center = pts.length ? [parseFloat(pts[0].lat), parseFloat(pts[0].lng)] : [4.6097, -74.0817];
-  leafletMapaPuntos = L.map("mapaPuntosMap").setView(center, pts.length ? 7 : 5);
+
+  leafletMapaPuntos = L.map("mapaPuntosMap", {
+    maxBounds: COLOMBIA_BOUNDS,
+    maxBoundsViscosity: 0.8,
+    minZoom: 5
+  }).setView(COLOMBIA_CENTER, 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
   }).addTo(leafletMapaPuntos);
@@ -6068,10 +6075,18 @@ function initMapaPuntosMap(puntos){
     );
   });
 
-  if(pts.length > 1){
-    const bounds = L.latLngBounds(pts.map(p=>[parseFloat(p.lat), parseFloat(p.lng)]));
-    leafletMapaPuntos.fitBounds(bounds, {padding:[30,30]});
-  }
+  // Arreglo del "mapa en blanco": si el contenedor se acaba de hacer visible, Leaflet
+  // a veces calcula mal su tamaño en el primer render. Forzamos un recálculo.
+  setTimeout(()=>{
+    if(!leafletMapaPuntos) return;
+    leafletMapaPuntos.invalidateSize();
+    if(pts.length > 1){
+      const bounds = L.latLngBounds(pts.map(p=>[parseFloat(p.lat), parseFloat(p.lng)]));
+      leafletMapaPuntos.fitBounds(bounds, {padding:[30,30], maxZoom:12});
+    } else if(pts.length === 1){
+      leafletMapaPuntos.setView([parseFloat(pts[0].lat), parseFloat(pts[0].lng)], 12);
+    }
+  }, 150);
 
   const legend = document.getElementById("mapaPuntosLegend");
   if(legend){
