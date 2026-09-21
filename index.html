@@ -1485,8 +1485,11 @@ function updateLocalDriveStatus(){
   }
 }
 
-async function loadAllDB(){
-  DB.audits = await loadAuditsFromStorage();
+async function loadAllDB(includeHeavy){
+  if(includeHeavy===undefined) includeHeavy = true;
+  if(includeHeavy){
+    DB.audits = await loadAuditsFromStorage();
+  }
   DB.supervisores = await loadMaster(MASTER_KEYS.supervisores, false);
   DB.puntos = await loadMaster(MASTER_KEYS.puntos, false);
   DB.visitas = await loadMaster(MASTER_KEYS.visitas, false);
@@ -1506,15 +1509,19 @@ async function loadAllDB(){
     DB.docTypes = DEFAULT_DOC_TYPE_NAMES.map(nombre=>({id:uid("dt"), nombre}));
     await saveMaster(MASTER_KEYS.docTypes, DB.docTypes);
   }
-  DB.documentos = await loadMaster(MASTER_KEYS.documentos, false);
+  if(includeHeavy){
+    DB.documentos = await loadMaster(MASTER_KEYS.documentos, false);
+    DB.equipos = await loadMaster(MASTER_KEYS.equipos, false);
+  }
   DB.instrumentos = await loadMaster(MASTER_KEYS.instrumentos, false);
   DB.lecturas = await loadMaster(MASTER_KEYS.lecturas, false);
   DB.solicitudes = await loadMaster(MASTER_KEYS.solicitudes, false);
   DB.notificaciones = await loadMaster(MASTER_KEYS.notificaciones, false);
   DB.limpieza = await loadMaster(MASTER_KEYS.limpieza, false);
-  DB.equipos = await loadMaster(MASTER_KEYS.equipos, false);
   DB.activos = await loadMaster(MASTER_KEYS.activos, false);
-  await seedSyncVerificationData();
+  if(includeHeavy){
+    await seedSyncVerificationData();
+  }
 }
 
 /* =========================================================
@@ -2761,7 +2768,7 @@ const MiPassword = {
    Refresca DB desde el storage compartido periódicamente y
    repinta solo la vista visible, sin pisar edición en curso.
    ========================================================= */
-const AUTO_REFRESH_MS = 20000; // 20s
+const AUTO_REFRESH_MS = 45000; // 45s (antes 20s, para reducir el consumo de datos de Supabase)
 let autoRefreshTimer = null;
 let isSyncing = false;
 
@@ -2790,12 +2797,15 @@ function isEditingAuditView(){
   return formVisible || actaVisible || planVisible;
 }
 
-async function refreshCurrentView(){
+async function refreshCurrentView(forceHeavy){
   if(!SESSION) return;
   if(isEditingAuditView()) return;
   if(isUserTyping()) return;
 
-  await loadAllDB();
+  // Liviano casi siempre: evita re-descargar auditorías/documentos/equipos (traen fotos en base64)
+  // en cada ciclo, para no disparar el consumo de datos (egress) de Supabase.
+  // Cada varios ciclos sí se hace una recarga completa, para que lo pesado también se termine actualizando.
+  await loadAllDB(!!forceHeavy);
 
   if(isUserTyping()) return; // por si el foco cambió mientras cargaba
 
@@ -2820,13 +2830,20 @@ async function refreshCurrentView(){
   }
 }
 
+let autoRefreshTickCount = 0;
+const HEAVY_REFRESH_EVERY_N_TICKS = 6; // con AUTO_REFRESH_MS=45s, una recarga completa cada ~4.5 min
+
 function startAutoRefresh(){
   if(!hasStorage) return; // sin storage compartido no hay nada que sincronizar
   stopAutoRefresh();
   autoRefreshTimer = setInterval(async ()=>{
     if(isSyncing) return;
     isSyncing = true;
-    try{ await refreshCurrentView(); }
+    try{
+      autoRefreshTickCount++;
+      const heavy = (autoRefreshTickCount % HEAVY_REFRESH_EVERY_N_TICKS === 0);
+      await refreshCurrentView(heavy);
+    }
     catch(e){ console.error("Error en auto-refresco:", e); }
     isSyncing = false;
   }, AUTO_REFRESH_MS);
