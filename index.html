@@ -1885,6 +1885,128 @@ function bulkColLabel(key){
   return c ? c.label : key;
 }
 
+/* ---- Corrección/completado masivo de puntos desde el diagnóstico MM-GO-FO-019 ----
+   Lee el archivo "DIAGNOSTICO DROGUERIAS" (hoja DIRECTORIO, 3 filas de encabezado) y,
+   para cada punto YA CREADO cuyo código coincide con la columna BODEGA:
+   - Latitud/Longitud: se completan SOLO si el punto aún no tiene coordenadas (es decir,
+     solo los puntos que el propio reporte "Puntos sin coordenadas" del mapa marca como
+     pendientes). Si el punto ya tiene lat/lng, NUNCA se sobrescriben.
+   - Departamento, Ciudad, Dirección, Nombre, Celular corporativo, Celular Director
+     Técnico, Correo corporativo y Horario de atención: se completan solo si el punto
+     los tiene vacíos, para no sobrescribir datos ya corregidos manualmente. */
+const DIAGNOSTICO_COL = {
+  departamento:0, municipio:1, divipola:2, bodega:3, tipoComprobante:4, supervisor:5,
+  estado:6, nombre:7, direccion:8, latlng:9, celularCorporativo:10, responsable:11,
+  celularPersonal:12, correo:13, horario:25
+};
+function parseLatLngDiagnostico(raw){
+  const s = String(raw==null?"":raw).trim();
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if(!m) return null;
+  return { lat: m[1], lng: m[2] };
+}
+function cellToPhoneStr(raw){
+  if(raw===null || raw===undefined || raw==="") return "";
+  if(typeof raw === "number") return String(Math.round(raw));
+  return String(raw).split("\n")[0].trim();
+}
+const PointsDiagnostico = {
+  async upload(){
+    if(typeof XLSX === "undefined"){ alert("No se pudo cargar el lector de Excel (se requiere conexión a internet)."); return; }
+    const input = document.getElementById("diagPointsFileInput");
+    const file = input && input.files[0];
+    if(!file){ alert("Selecciona primero el archivo .xlsx del diagnóstico (MM-GO-FO-019)."); return; }
+    try{
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:"array"});
+      const ws = wb.Sheets["DIRECTORIO"] || wb.Sheets[wb.SheetNames[0]];
+      if(!ws){ alert("No se encontró ninguna hoja en el archivo."); return; }
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, range:3, defval:""});
+
+      // Si un código se repite en el archivo, se usa la última fila (más reciente en el documento).
+      const porCodigo = new Map();
+      rows.forEach(row=>{
+        const bodega = String(row[DIAGNOSTICO_COL.bodega]||"").trim();
+        if(!bodega || bodega.toUpperCase()==="N/A") return;
+        porCodigo.set(bodega.toUpperCase(), row);
+      });
+
+      if(porCodigo.size===0){ alert("No se encontraron filas con código de bodega en el archivo. Verifica que sea el diagnóstico MM-GO-FO-019 (hoja DIRECTORIO)."); return; }
+
+      let actualizados = 0, coordenadasCorregidas = 0, camposCompletados = 0, sinCoordenadasEnDiagnostico = 0;
+      const noEncontrados = [];
+      const puntosSinCodigo = DB.puntos.filter(p=>!p.codigo || !p.codigo.trim()).length;
+
+      DB.puntos.forEach(p=>{
+        const codKey = (p.codigo||"").trim().toUpperCase();
+        if(!codKey) return; // sin código no se puede cruzar con el diagnóstico
+        const row = porCodigo.get(codKey);
+        if(!row){ noEncontrados.push(p.codigo); return; }
+
+        let huboCambio = false;
+
+        const tieneCoord = p.lat && p.lng && String(p.lat).trim() && String(p.lng).trim();
+        if(!tieneCoord){
+          const ll = parseLatLngDiagnostico(row[DIAGNOSTICO_COL.latlng]);
+          if(ll){
+            p.lat = ll.lat; p.lng = ll.lng;
+            coordenadasCorregidas++; huboCambio = true;
+          } else {
+            sinCoordenadasEnDiagnostico++;
+          }
+        }
+
+        const completar = (field, raw)=>{
+          const val = typeof raw === "string" ? raw.trim() : cellToPhoneStr(raw);
+          if(!val) return;
+          if(!p[field] || !String(p[field]).trim()){
+            p[field] = val;
+            camposCompletados++; huboCambio = true;
+          }
+        };
+        completar("departamento", row[DIAGNOSTICO_COL.departamento]);
+        completar("ciudad", row[DIAGNOSTICO_COL.municipio]);
+        completar("direccion", row[DIAGNOSTICO_COL.direccion]);
+        completar("nombre", row[DIAGNOSTICO_COL.nombre]);
+        completar("celularCorporativo", row[DIAGNOSTICO_COL.celularCorporativo]);
+        completar("celularDirectorTecnico", row[DIAGNOSTICO_COL.celularPersonal]);
+        completar("correoCorporativo", row[DIAGNOSTICO_COL.correo]);
+        completar("horarioAtencion", row[DIAGNOSTICO_COL.horario]);
+
+        if(huboCambio) actualizados++;
+      });
+
+      if(actualizados===0){
+        alert("No había nada para corregir o completar: todos los puntos con código coincidente ya tenían sus datos básicos y coordenadas al día.");
+        return;
+      }
+
+      const resumenNoEncontrados = noEncontrados.length
+        ? `\n\n${noEncontrados.length} punto(s) creados en la app no aparecen en el diagnóstico (código no encontrado): ${noEncontrados.slice(0,10).join(", ")}${noEncontrados.length>10?"…":""}`
+        : "";
+      const resumenSinCodigo = puntosSinCodigo>0 ? `\n${puntosSinCodigo} punto(s) no tienen código registrado, así que no se pudieron cruzar.` : "";
+      const confirmar = confirm(
+        `Se van a guardar estos cambios:\n\n` +
+        `• ${actualizados} punto(s) actualizados en total\n` +
+        `• ${coordenadasCorregidas} punto(s) sin coordenadas completados con lat/lng del diagnóstico (las que ya tenían coordenadas NO se tocan)\n` +
+        `• ${camposCompletados} campo(s) básicos completados (solo los que estaban vacíos)\n` +
+        (sinCoordenadasEnDiagnostico>0 ? `• ${sinCoordenadasEnDiagnostico} punto(s) sin coordenadas, pero el diagnóstico tampoco trae coordenadas válidas para ellos\n` : "") +
+        resumenNoEncontrados + resumenSinCodigo +
+        `\n\n¿Guardar estos cambios ahora?`
+      );
+      if(!confirmar) return;
+
+      await saveMaster(MASTER_KEYS.puntos, DB.puntos);
+      input.value = "";
+      renderDirectorPuntos();
+      alert(`Listo. Se actualizaron ${actualizados} punto(s) (${coordenadasCorregidas} con coordenadas completadas).`);
+    }catch(err){
+      console.error("Error importando diagnóstico de puntos:", err);
+      alert("No se pudo leer el archivo. Verifica que sea el .xlsx del diagnóstico MM-GO-FO-019 (hoja DIRECTORIO).");
+    }
+  }
+};
+
 const BULK_SUPERVISOR_COLUMNS = [
   {key:"nombre", label:"Nombre completo", required:true},
   {key:"identificacion", label:"Identificación (C.C.)", required:true},
@@ -6395,6 +6517,14 @@ function renderDirectorPuntos(){
         <button class="btn btn-ghost btn-sm" onclick="PointsBulk.downloadTemplate()">⬇ Descargar plantilla Excel</button>
         <label class="f">Archivo con los puntos<input type="file" id="bulkPointsFileInput" accept=".xlsx,.xls"></label>
         <button class="btn btn-primary btn-sm" onclick="PointsBulk.upload()">⬆ Subir y crear puntos</button>
+      </div>
+    </div>
+    <div class="panel" style="border-color:var(--amber-500,#d97706);background:var(--amber-100,#fef3c7);">
+      <h4 style="margin-top:0;">🛰️ Corregir y completar puntos desde el diagnóstico (MM-GO-FO-019)</h4>
+      <p style="font-size:12px;">Sube el archivo de diagnóstico de droguerías (hoja DIRECTORIO). Se cruza por código de bodega con los puntos ya creados: la latitud y longitud solo se completan en los puntos que aún NO tienen coordenadas (los que el reporte "Puntos sin coordenadas" del mapa señala) — si el punto ya tiene coordenadas, nunca se modifican. Los demás datos básicos (departamento, ciudad, dirección, nombre, celulares, correo, horario) también solo se completan si el punto los tenía vacíos. No crea puntos nuevos ni modifica el supervisor asignado.</p>
+      <div class="inline-form">
+        <label class="f">Archivo de diagnóstico<input type="file" id="diagPointsFileInput" accept=".xlsx,.xls"></label>
+        <button class="btn btn-primary btn-sm" onclick="PointsDiagnostico.upload()">🛰️ Corregir y completar puntos</button>
       </div>
     </div>
     <div class="panel">
