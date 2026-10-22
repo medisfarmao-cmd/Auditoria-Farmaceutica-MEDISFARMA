@@ -637,6 +637,7 @@ canvas.sigpad{
       <button class="navtab" data-nav="puntodispensacion" id="navPuntoDispensacion" onclick="App.showMain('puntodispensacion')">📍 Punto de dispensación</button>
       <button class="navtab" data-nav="turnos" onclick="App.showMain('turnos')">📅 Auditoría de Turnos</button>
       <button class="navtab" data-nav="rechazos" onclick="App.showMain('rechazos')">🚫 Dispensaciones No facturables</button>
+      <button class="navtab" data-nav="informe" onclick="App.showMain('informe')">📊 Informe de Dispensación</button>
     </div>
     <div class="main-content">
 
@@ -754,6 +755,7 @@ canvas.sigpad{
           <button class="subtab" data-psub="auditorias" onclick="App.showPuntoSub('auditorias')">Mis auditorías</button>
           <button class="subtab" data-psub="turnos" onclick="App.showPuntoSub('turnos')">📅 Auditoría de Turnos</button>
           <button class="subtab" data-psub="rechazos" onclick="App.showPuntoSub('rechazos')">🚫 Dispensaciones No facturables</button>
+          <button class="subtab" data-psub="informe" onclick="App.showPuntoSub('informe')">📊 Informe de Dispensación</button>
           <button class="subtab" data-psub="password" onclick="App.showPuntoSub('password')">Mi contraseña</button>
         </div>
         <div class="view" id="puntoDocsContent"></div>
@@ -775,6 +777,13 @@ canvas.sigpad{
             <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: dispensaciones no facturables por punto de dispensación. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
           </div>
           <iframe id="puntoRechazosFrame" data-src="rechazos.html" title="Dispensaciones No facturables" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+        </div>
+        <div class="view hidden" id="puntoInformeContent">
+          <div class="panel" style="margin-bottom:12px;">
+            <h3 style="margin-top:0;">📊 Informe de Dispensación</h3>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: genera el informe diario de dispensación a partir del Detallado de Dispensación (CSV). Publica la información completa de todos los puntos, sin restricción de bodegas.</p>
+          </div>
+          <iframe id="puntoInformeFrame" data-src="informe.html" title="Informe de Dispensación" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
         </div>
         <div class="view hidden" id="puntoPasswordContent"></div>
       </div>
@@ -819,6 +828,15 @@ canvas.sigpad{
           <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: dispensaciones no facturables por punto de dispensación a nivel nacional. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
         </div>
         <iframe id="rechazosFrame" data-src="rechazos.html" title="Dispensaciones No facturables" loading="lazy" style="width:100%;height:calc(100vh - 170px);min-height:600px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+      </div>
+
+      <!-- INFORME DE DISPENSACIÓN (solo consulta — panel autocontenido, sin Supabase; publica todos los puntos, sin restricción de bodegas) -->
+      <div class="hidden" id="section-informe">
+        <div class="panel" style="margin-bottom:12px;">
+          <h3 style="margin-top:0;">📊 Informe de Dispensación</h3>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: genera el informe diario de dispensación a partir del Detallado de Dispensación (CSV). Publica la información completa de todos los puntos, sin restricción de bodegas. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
+        </div>
+        <iframe id="informeFrame" data-src="informe.html" title="Informe de Dispensación" loading="lazy" style="width:100%;height:calc(100vh - 170px);min-height:600px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
       </div>
 
     </div>
@@ -7044,6 +7062,7 @@ const App = {
     document.getElementById("section-punto").classList.add("hidden");
     document.getElementById("section-turnos").classList.add("hidden");
     document.getElementById("section-rechazos").classList.add("hidden");
+    document.getElementById("section-informe").classList.add("hidden");
     document.getElementById("sessionBadge").classList.add("hidden");
     document.getElementById("view-login").classList.remove("hidden");
     document.getElementById("login_role").value = "admin";
@@ -7067,6 +7086,7 @@ const App = {
       document.getElementById("section-puntodispensacion").classList.add("hidden");
       document.getElementById("section-turnos").classList.add("hidden");
       document.getElementById("section-rechazos").classList.add("hidden");
+      document.getElementById("section-informe").classList.add("hidden");
       document.getElementById("section-punto").classList.remove("hidden");
       this.showPuntoSub("documentos");
     } else {
@@ -7088,6 +7108,7 @@ const App = {
     document.getElementById("section-puntodispensacion").classList.toggle("hidden", section!=="puntodispensacion");
     document.getElementById("section-turnos").classList.toggle("hidden", section!=="turnos");
     document.getElementById("section-rechazos").classList.toggle("hidden", section!=="rechazos");
+    document.getElementById("section-informe").classList.toggle("hidden", section!=="informe");
     document.querySelectorAll(".navtab").forEach(b=>b.classList.toggle("active", b.dataset.nav===section));
     if(section==="notificaciones") this.showNotifSub(this.currentNotifSub);
     if(section==="director") this.showDirectorSub(this.currentDirSub);
@@ -7095,6 +7116,7 @@ const App = {
     if(section==="puntodispensacion") this.renderPuntoDispensacionTab();
     if(section==="turnos") this.loadTurnosFrame("turnosFrame");
     if(section==="rechazos") this.loadTurnosFrame("rechazosFrame");
+    if(section==="informe") this.loadTurnosFrame("informeFrame");
   },
   loadTurnosFrame(iframeId){
     const f = document.getElementById(iframeId);
@@ -7185,6 +7207,7 @@ const App = {
     document.getElementById("puntoAuditContent").classList.toggle("hidden", sub!=="auditorias");
     document.getElementById("puntoTurnosContent").classList.toggle("hidden", sub!=="turnos");
     document.getElementById("puntoRechazosContent").classList.toggle("hidden", sub!=="rechazos");
+    document.getElementById("puntoInformeContent").classList.toggle("hidden", sub!=="informe");
     document.getElementById("puntoPasswordContent").classList.toggle("hidden", sub!=="password");
     document.querySelectorAll('[data-psub]').forEach(b=>b.classList.toggle("active", b.dataset.psub===sub));
     if(sub==="documentos") renderPuntoDocs();
@@ -7195,6 +7218,7 @@ const App = {
     if(sub==="auditorias") renderPuntoAudits();
     if(sub==="turnos") this.loadTurnosFrame("puntoTurnosFrame");
     if(sub==="rechazos") this.loadTurnosFrame("puntoRechazosFrame");
+    if(sub==="informe") this.loadTurnosFrame("puntoInformeFrame");
     if(sub==="password") renderMiPassword("puntoPasswordContent");
   },
   show(view){
