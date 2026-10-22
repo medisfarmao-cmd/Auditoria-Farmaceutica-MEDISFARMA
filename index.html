@@ -501,6 +501,7 @@ canvas.sigpad{
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -681,6 +682,7 @@ canvas.sigpad{
           <button class="btn btn-ghost" id="btnBackToEdit" onclick="App.backToForm()">&larr; Volver a editar</button>
           <button class="btn btn-ghost hidden" id="btnBackToPunto" onclick="App.backToPunto()">&larr; Volver a mis auditorías</button>
           <button class="btn btn-primary" id="btnDownloadPdf" onclick="exportPDF()">⬇ Descargar PDF</button>
+          <button class="btn btn-ghost" id="btnDownloadFotos" onclick="descargarFotosActa()">📸 Descargar fotos (tamaño completo)</button>
           <button class="btn btn-ghost" onclick="window.print()">Imprimir</button>
           <button class="btn btn-primary" id="btnSubmitReview" onclick="ActaFlow.submitForReview()">📤 Enviar para revisión</button>
           <button class="btn btn-ghost" id="btnViewPlan" onclick="ActaFlow.goToPlan()">📋 Ver plan de mejora</button>
@@ -1088,7 +1090,7 @@ function renderPhotoPanel(){
         <div class="photo-slot">
           <div class="photo-slot-label">${area}</div>
           ${f ? `
-            <img src="${f.dataUri}" class="photo-slot-thumb">
+            <img src="${f.url || f.dataUri}" class="photo-slot-thumb">
             <div class="photo-slot-meta">${new Date(f.timestamp).toLocaleString("es-CO")}<br>${f.lat!==null && f.lat!==undefined ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}` : "Sin GPS"}</div>
           ` : `<div class="photo-slot-empty">Sin foto aún</div>`}
           <label class="btn btn-ghost btn-sm photo-capture-btn">
@@ -1106,7 +1108,7 @@ function renderPhotoPanel(){
       ${current.fotosExtra.map(f=>`
         <div class="photo-slot">
           <div class="photo-slot-label">${esc(f.label)}</div>
-          <img src="${f.dataUri}" class="photo-slot-thumb">
+          <img src="${f.url || f.dataUri}" class="photo-slot-thumb">
           <div class="photo-slot-meta">${new Date(f.timestamp).toLocaleString("es-CO")}<br>${f.lat!==null && f.lat!==undefined ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}` : "Sin GPS"}</div>
           <button class="btn btn-danger btn-sm" type="button" onclick="AuditPhotos.removeExtra('${f.id}')">Eliminar</button>
         </div>
@@ -1130,8 +1132,15 @@ const AuditPhotos = {
     if(!current.ubicacionAuditoria && geo){
       current.ubicacionAuditoria = { lat:geo.lat, lng:geo.lng, capturedAt:timestamp };
     }
-    scheduleSave();
     renderPhotoPanel();
+    scheduleSave(); // guarda ya con el dataUri, por si la subida a R2 tarda o falla no se pierde la evidencia
+    const keyPath = `auditorias/${current.id}/${area.replace(/[^a-zA-Z0-9]/g,"_")}_${Date.now()}.jpg`;
+    const url = await uploadToR2(dataUri, keyPath);
+    if(url && current.fotos[area] && current.fotos[area].timestamp===timestamp){
+      current.fotos[area].url = url;
+      delete current.fotos[area].dataUri; // ya se sirve desde R2, no hace falta duplicar el peso en el acta
+      scheduleSave();
+    }
   },
   async captureLocation(){
     try{
@@ -1160,9 +1169,18 @@ const AuditPhotos = {
       const timestamp = new Date().toISOString();
       let geo = null;
       try{ geo = await getGeolocationOnce(6000); }catch(e){ geo = null; }
-      current.fotosExtra.push({ id: uid("foto"), label: label.trim(), dataUri, timestamp, lat: geo?geo.lat:null, lng: geo?geo.lng:null });
-      scheduleSave();
+      const fotoId = uid("foto");
+      current.fotosExtra.push({ id: fotoId, label: label.trim(), dataUri, timestamp, lat: geo?geo.lat:null, lng: geo?geo.lng:null });
       renderPhotoPanel();
+      scheduleSave();
+      const keyPath = `auditorias/${current.id}/extra_${fotoId}.jpg`;
+      const url = await uploadToR2(dataUri, keyPath);
+      const f = current.fotosExtra.find(x=>x.id===fotoId);
+      if(url && f){
+        f.url = url;
+        delete f.dataUri;
+        scheduleSave();
+      }
     };
     inputEl.click();
   },
@@ -2404,6 +2422,32 @@ function dataUriToBlob(dataUri){
   return new Blob([arr], {type:mime});
 }
 
+/* ---- Almacenamiento de fotos/evidencias en Cloudflare R2 (reduce egress de Supabase) ----
+   En vez de guardar las fotos como base64 dentro del acta/hallazgo (lo que hacía pesadísimo
+   cada registro y obligaba a re-descargar fotos cada vez que alguien solo quería ver una lista
+   o un contador), las fotos se suben a un bucket de R2 y solo se guarda el link (unas letras).
+   Si por cualquier motivo la subida falla (sin internet, Worker caído, etc.), se mantiene el
+   dataUri como respaldo para no perder nunca la evidencia — simplemente pesará más ese registro
+   puntual hasta que se pueda volver a subir. */
+const R2_PUBLIC_BASE = "https://pub-1ce0708dee634c6ea3e79b576e188cd4.r2.dev";
+const R2_UPLOAD_URL = "https://medisfarma-upload.medisfarmao.workers.dev/upload";
+const R2_UPLOAD_KEY = "fFvgd5t33d4fOgXg51d5d";
+async function uploadToR2(dataUri, keyPath){
+  try{
+    const blob = dataUriToBlob(dataUri);
+    const res = await fetch(`${R2_UPLOAD_URL}?key=${encodeURIComponent(keyPath)}`, {
+      method: "POST",
+      headers: { "Content-Type": blob.type || "application/octet-stream", "X-Upload-Key": R2_UPLOAD_KEY },
+      body: blob
+    });
+    if(!res.ok) throw new Error("upload-failed-" + res.status);
+    return `${R2_PUBLIC_BASE}/${keyPath}`;
+  }catch(e){
+    console.error("Error subiendo evidencia a R2 (se conserva localmente como respaldo):", e);
+    return null;
+  }
+}
+
 /* ---- Toma de temperatura / termohigrómetros ---- */
 const AREA_OPTIONS = ["Almacenamiento","Cadena de frío","Recepción","Cuarentena","Bodega"];
 
@@ -3150,6 +3194,7 @@ async function syncHallazgos(){
               estadoAprobacion: existing[id].estadoAprobacion || "",
               evidenciaNombre: existing[id].evidenciaNombre || "",
               evidenciaDataUri: existing[id].evidenciaDataUri || "",
+              evidenciaUrl: existing[id].evidenciaUrl || "",
               evidenciaComentario: existing[id].evidenciaComentario || "",
               evidenciaEnviadaAt: existing[id].evidenciaEnviadaAt || ""
             });
@@ -3164,6 +3209,7 @@ async function syncHallazgos(){
               estadoAprobacion:"",
               evidenciaNombre:"",
               evidenciaDataUri:"",
+              evidenciaUrl:"",
               evidenciaComentario:"",
               evidenciaEnviadaAt:""
             });
@@ -3631,14 +3677,14 @@ function renderActa(){
           return `<div class="photo-card missing"><div>${esc(area)}</div><p>Sin evidencia registrada</p></div>`;
         }
         return `<div class="photo-card">
-          <img src="${f.dataUri}" alt="${esc(area)}">
+          <img src="${f.url || f.dataUri}" alt="${esc(area)}">
           <div class="photo-area-lbl">${esc(area)}</div>
           <div class="photo-meta-cap">${new Date(f.timestamp).toLocaleString('es-CO')}<br>${f.lat!==null && f.lat!==undefined ? locationLinkHtml(f) : 'Ubicación no disponible'}</div>
         </div>`;
       }).join("")}
       ${(current.fotosExtra||[]).map(f=>`
         <div class="photo-card">
-          <img src="${f.dataUri}" alt="${esc(f.label)}">
+          <img src="${f.url || f.dataUri}" alt="${esc(f.label)}">
           <div class="photo-area-lbl">${esc(f.label)}</div>
           <div class="photo-meta-cap">${new Date(f.timestamp).toLocaleString('es-CO')}<br>${f.lat!==null && f.lat!==undefined ? locationLinkHtml(f) : 'Ubicación no disponible'}</div>
         </div>
@@ -3811,6 +3857,71 @@ async function exportPDF(){
   }finally{
     btn.textContent = originalText;
     btn.disabled = false;
+  }
+}
+
+/* ---- Descarga de las fotos del acta en tamaño completo (las del PDF salen muy pequeñas
+   porque van incrustadas en la hoja; esto permite revisarlas en detalle o compartirlas) ---- */
+async function descargarFotosActa(){
+  if(!current) return;
+  const items = [];
+  PHOTO_AREAS.forEach(area=>{
+    const f = current.fotos ? current.fotos[area] : null;
+    if(f && (f.url || f.dataUri)) items.push({ nombre: area, f });
+  });
+  (current.fotosExtra || []).forEach(f=>{
+    if(f.url || f.dataUri) items.push({ nombre: f.label || "Evidencia adicional", f });
+  });
+  if(items.length === 0){ alert("Esta auditoría todavía no tiene fotos registradas."); return; }
+  if(typeof JSZip === "undefined"){
+    alert("No se pudo cargar el generador de ZIP (se requiere conexión a internet)."); return;
+  }
+
+  const btn = document.getElementById("btnDownloadFotos");
+  const originalText = btn ? btn.textContent : "";
+  if(btn){ btn.disabled = true; btn.textContent = "Preparando fotos…"; }
+  try{
+    const zip = new JSZip();
+    let agregadas = 0;
+    for(let i=0; i<items.length; i++){
+      const { nombre, f } = items[i];
+      let blob;
+      try{
+        if(f.url){
+          const res = await fetch(f.url);
+          if(!res.ok) throw new Error("fetch-failed-" + res.status);
+          blob = await res.blob();
+        } else {
+          blob = dataUriToBlob(f.dataUri);
+        }
+      }catch(e){
+        console.error(`No se pudo descargar la foto "${nombre}":`, e);
+        continue;
+      }
+      const nombreArchivo = String(nombre).trim().replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ ]+/g,"").replace(/\s+/g,"_");
+      zip.file(`${String(i+1).padStart(2,"0")}_${nombreArchivo || "foto"}.jpg`, blob);
+      agregadas++;
+    }
+    if(agregadas === 0){
+      alert("No se pudo descargar ninguna foto. Verifica tu conexión a internet e intenta de nuevo.");
+      return;
+    }
+    const content = await zip.generateAsync({ type: "blob" });
+    const h = current.header || {};
+    const puntoNombre = (h.establecimientoNombre || "punto").replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ ]+/g,"").replace(/\s+/g,"_");
+    const fecha = (current.createdAt || "").slice(0,10) || todayStr();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = `Fotos_Auditoria_${puntoNombre}_${fecha}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(()=>URL.revokeObjectURL(link.href), 5000);
+  }catch(e){
+    console.error("Error generando el ZIP de fotos:", e);
+    alert("Ocurrió un error preparando las fotos. Intenta de nuevo.");
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = originalText; }
   }
 }
 
@@ -5094,11 +5205,11 @@ const hallazgosFormAbierto = new Set(); // ids de hallazgos con el formulario de
 function renderSubsanacionCell(h, isAdmin){
   if(h.estado==="Subsanado"){
     return `<span style="color:var(--green);font-weight:700;font-size:12px;">✓ Cerrado${h.fechaCierre?" · "+esc(h.fechaCierre):""}</span>
-      ${h.evidenciaDataUri ? `<br><a href="${h.evidenciaDataUri}" download="${esc(h.evidenciaNombre||'evidencia')}" style="font-size:11px;">📎 Ver evidencia</a>` : ""}`;
+      ${(h.evidenciaUrl || h.evidenciaDataUri) ? `<br><a href="${h.evidenciaUrl || h.evidenciaDataUri}" download="${esc(h.evidenciaNombre||'evidencia')}" style="font-size:11px;">📎 Ver evidencia</a>` : ""}`;
   }
   if(h.estadoAprobacion==="Pendiente"){
     let html = `<span class="chip-mini" style="background:var(--amber-bg);color:var(--amber);">⏳ Pendiente de aprobación</span>`;
-    if(h.evidenciaDataUri) html += `<br><a href="${h.evidenciaDataUri}" download="${esc(h.evidenciaNombre||'evidencia')}" style="font-size:11px;">📎 Ver evidencia</a>`;
+    if(h.evidenciaUrl || h.evidenciaDataUri) html += `<br><a href="${h.evidenciaUrl || h.evidenciaDataUri}" download="${esc(h.evidenciaNombre||'evidencia')}" style="font-size:11px;">📎 Ver evidencia</a>`;
     if(h.evidenciaComentario) html += `<div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">"${esc(h.evidenciaComentario)}"</div>`;
     if(isAdmin){
       html += `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">
@@ -5150,12 +5261,24 @@ const Hallazgos = {
     try{ dataUri = await fileToDataUri(file); }
     catch(e){ alert("No se pudo leer el archivo. Intenta de nuevo."); return; }
     h.evidenciaNombre = file.name;
-    h.evidenciaDataUri = dataUri;
+    h.evidenciaDataUri = dataUri; // respaldo local por si falla la subida a R2
+    h.evidenciaUrl = "";
     h.evidenciaComentario = comentario;
     h.evidenciaEnviadaAt = new Date().toISOString();
     h.estadoAprobacion = "Pendiente";
     if(h.estado==="Abierto") h.estado = "En gestión";
     await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+    // Esta evidencia viaja dentro de master:hallazgos, que se descarga en CADA inicio de sesión
+    // de todos los usuarios, así que es especialmente importante no dejarla incrustada en base64.
+    const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || "");
+    const ext = extMatch ? extMatch[1].toLowerCase() : "bin";
+    const keyPath = `hallazgos/${h.id}/evidencia_${Date.now()}.${ext}`;
+    const url = await uploadToR2(dataUri, keyPath);
+    if(url){
+      h.evidenciaUrl = url;
+      h.evidenciaDataUri = "";
+      await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+    }
     hallazgosFormAbierto.delete(id);
     const supNombre = supervisorNombre(h.supervisorId);
     await addNotificacion({
