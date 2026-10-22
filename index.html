@@ -635,6 +635,7 @@ canvas.sigpad{
       <button class="navtab hidden" data-nav="director" id="navDirector" onclick="App.showMain('director')">🗂️ Director</button>
       <button class="navtab" data-nav="supervisores" onclick="App.showMain('supervisores')">👥 Supervisores</button>
       <button class="navtab" data-nav="puntodispensacion" id="navPuntoDispensacion" onclick="App.showMain('puntodispensacion')">📍 Punto de dispensación</button>
+      <button class="navtab" data-nav="turnos" onclick="App.showMain('turnos')">📅 Auditoría de Turnos</button>
     </div>
     <div class="main-content">
 
@@ -750,6 +751,7 @@ canvas.sigpad{
           <button class="subtab" data-psub="mantenimiento" onclick="App.showPuntoSub('mantenimiento')">Mantenimiento de equipos</button>
           <button class="subtab" data-psub="activos" onclick="App.showPuntoSub('activos')">Activos fijos</button>
           <button class="subtab" data-psub="auditorias" onclick="App.showPuntoSub('auditorias')">Mis auditorías</button>
+          <button class="subtab" data-psub="turnos" onclick="App.showPuntoSub('turnos')">📅 Auditoría de Turnos</button>
           <button class="subtab" data-psub="password" onclick="App.showPuntoSub('password')">Mi contraseña</button>
         </div>
         <div class="view" id="puntoDocsContent"></div>
@@ -758,6 +760,13 @@ canvas.sigpad{
         <div class="view hidden" id="puntoMantenimientoContent"></div>
         <div class="view hidden" id="puntoActivosContent"></div>
         <div class="view hidden" id="puntoAuditContent"></div>
+        <div class="view hidden" id="puntoTurnosContent">
+          <div class="panel" style="margin-bottom:12px;">
+            <h3 style="margin-top:0;">📅 Auditoría de Turnos</h3>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: balance de turnos digitales por punto de dispensación. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
+          </div>
+          <iframe id="puntoTurnosFrame" data-src="turnos.html" title="Auditoría de Turnos" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+        </div>
         <div class="view hidden" id="puntoPasswordContent"></div>
       </div>
 
@@ -783,6 +792,15 @@ canvas.sigpad{
         <div class="view hidden" id="pdispLimpiezaContent"></div>
         <div class="view hidden" id="pdispMantenimientoContent"></div>
         <div class="view hidden" id="pdispActivosContent"></div>
+      </div>
+
+      <!-- AUDITORÍA DE TURNOS (solo consulta — panel autocontenido, sin Supabase) -->
+      <div class="hidden" id="section-turnos">
+        <div class="panel" style="margin-bottom:12px;">
+          <h3 style="margin-top:0;">📅 Auditoría de Turnos</h3>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: balance de turnos digitales por punto de dispensación a nivel nacional. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
+        </div>
+        <iframe id="turnosFrame" data-src="turnos.html" title="Auditoría de Turnos" loading="lazy" style="width:100%;height:calc(100vh - 170px);min-height:600px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
       </div>
 
     </div>
@@ -7006,6 +7024,7 @@ const App = {
     document.getElementById("section-supervisores").classList.add("hidden");
     document.getElementById("section-puntodispensacion").classList.add("hidden");
     document.getElementById("section-punto").classList.add("hidden");
+    document.getElementById("section-turnos").classList.add("hidden");
     document.getElementById("sessionBadge").classList.add("hidden");
     document.getElementById("view-login").classList.remove("hidden");
     document.getElementById("login_role").value = "admin";
@@ -7027,6 +7046,7 @@ const App = {
       document.getElementById("section-director").classList.add("hidden");
       document.getElementById("section-supervisores").classList.add("hidden");
       document.getElementById("section-puntodispensacion").classList.add("hidden");
+      document.getElementById("section-turnos").classList.add("hidden");
       document.getElementById("section-punto").classList.remove("hidden");
       this.showPuntoSub("documentos");
     } else {
@@ -7046,11 +7066,17 @@ const App = {
     document.getElementById("section-director").classList.toggle("hidden", section!=="director");
     document.getElementById("section-supervisores").classList.toggle("hidden", section!=="supervisores");
     document.getElementById("section-puntodispensacion").classList.toggle("hidden", section!=="puntodispensacion");
+    document.getElementById("section-turnos").classList.toggle("hidden", section!=="turnos");
     document.querySelectorAll(".navtab").forEach(b=>b.classList.toggle("active", b.dataset.nav===section));
     if(section==="notificaciones") this.showNotifSub(this.currentNotifSub);
     if(section==="director") this.showDirectorSub(this.currentDirSub);
     if(section==="supervisores") this.showSub(this.currentSub);
     if(section==="puntodispensacion") this.renderPuntoDispensacionTab();
+    if(section==="turnos") this.loadTurnosFrame("turnosFrame");
+  },
+  loadTurnosFrame(iframeId){
+    const f = document.getElementById(iframeId);
+    if(f && !f.src && f.dataset.src) f.src = f.dataset.src;
   },
   currentNotifSub: "actividad",
   showNotifSub(sub){
@@ -7135,6 +7161,7 @@ const App = {
     document.getElementById("puntoMantenimientoContent").classList.toggle("hidden", sub!=="mantenimiento");
     document.getElementById("puntoActivosContent").classList.toggle("hidden", sub!=="activos");
     document.getElementById("puntoAuditContent").classList.toggle("hidden", sub!=="auditorias");
+    document.getElementById("puntoTurnosContent").classList.toggle("hidden", sub!=="turnos");
     document.getElementById("puntoPasswordContent").classList.toggle("hidden", sub!=="password");
     document.querySelectorAll('[data-psub]').forEach(b=>b.classList.toggle("active", b.dataset.psub===sub));
     if(sub==="documentos") renderPuntoDocs();
@@ -7143,6 +7170,7 @@ const App = {
     if(sub==="mantenimiento") renderPuntoMantenimiento();
     if(sub==="activos") renderPuntoActivos();
     if(sub==="auditorias") renderPuntoAudits();
+    if(sub==="turnos") this.loadTurnosFrame("puntoTurnosFrame");
     if(sub==="password") renderMiPassword("puntoPasswordContent");
   },
   show(view){
