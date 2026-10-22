@@ -1541,49 +1541,71 @@ function updateLocalDriveStatus(){
 
 async function loadAllDB(level){
   // Tres niveles, de más frecuente/liviano a menos frecuente/pesado:
-  // "light"  → solo lo que de verdad necesita sentirse en vivo (coordinación entre personas)
-  // "medium" → + config, catálogos y registros que crecen con el tiempo pero rara vez los mira una 2a persona en el momento
+  // "light"  → lo que de verdad necesita sentirse en vivo (coordinación entre personas) + config (gatea el PIN de admin)
+  // "medium" → + catálogos y registros que crecen con el tiempo pero rara vez los mira una 2a persona en el momento
   // "full"   → + auditorías, documentos y soportes de mantenimiento (traen archivos/fotos en base64, lo más pesado)
+  // Dentro de cada nivel, las consultas van en paralelo (Promise.all) en vez de una por una,
+  // para que el arranque (pantalla de login) y las pantallas livianas respondan de inmediato.
   if(level===true) level = "full";
-  if(level===false || level===undefined) level = "full"; // por compatibilidad: sin argumento, carga todo (arranque de la app)
+  if(level===false || level===undefined) level = "full"; // por compatibilidad: sin argumento, carga todo
   const includeHeavy = (level==="full");
   const includeMedium = (level==="full" || level==="medium");
 
-  if(includeHeavy){
-    DB.audits = await loadAuditsFromStorage();
+  const [supervisores, puntos, visitas, hallazgos, hallazgosEliminados, solicitudes, notificaciones, config] = await Promise.all([
+    loadMaster(MASTER_KEYS.supervisores, false),
+    loadMaster(MASTER_KEYS.puntos, false),
+    loadMaster(MASTER_KEYS.visitas, false),
+    loadMaster(MASTER_KEYS.hallazgos, false),
+    loadMaster(MASTER_KEYS.hallazgosEliminados, false),
+    loadMaster(MASTER_KEYS.solicitudes, false),
+    loadMaster(MASTER_KEYS.notificaciones, false),
+    loadMaster(MASTER_KEYS.config, true),
+  ]);
+  DB.supervisores = supervisores;
+  DB.puntos = puntos;
+  DB.visitas = visitas;
+  DB.hallazgos = hallazgos;
+  DB.hallazgosEliminados = hallazgosEliminados;
+  DB.solicitudes = solicitudes;
+  DB.notificaciones = notificaciones;
+  DB.config = config;
+  if(!DB.config || typeof DB.config !== "object" || Array.isArray(DB.config)) DB.config = {};
+  if(DB.config.adminPin===undefined) DB.config.adminPin = "";
+  if(!DB.config.clasificacion){
+    DB.config.clasificacion = {
+      usuariosA:500, usuariosB:150,
+      frecuenciaA:1, frecuenciaB:2, frecuenciaC:4
+    };
   }
-  DB.supervisores = await loadMaster(MASTER_KEYS.supervisores, false);
-  DB.puntos = await loadMaster(MASTER_KEYS.puntos, false);
-  DB.visitas = await loadMaster(MASTER_KEYS.visitas, false);
-  DB.hallazgos = await loadMaster(MASTER_KEYS.hallazgos, false);
-  DB.hallazgosEliminados = await loadMaster(MASTER_KEYS.hallazgosEliminados, false);
-  DB.solicitudes = await loadMaster(MASTER_KEYS.solicitudes, false);
-  DB.notificaciones = await loadMaster(MASTER_KEYS.notificaciones, false);
 
   if(includeMedium){
-    DB.config = await loadMaster(MASTER_KEYS.config, true);
-    if(!DB.config || typeof DB.config !== "object" || Array.isArray(DB.config)) DB.config = {};
-    if(DB.config.adminPin===undefined) DB.config.adminPin = "";
-    if(!DB.config.clasificacion){
-      DB.config.clasificacion = {
-        usuariosA:500, usuariosB:150,
-        frecuenciaA:1, frecuenciaB:2, frecuenciaC:4
-      };
-    }
-    DB.docTypes = await loadMaster(MASTER_KEYS.docTypes, false);
+    const [docTypes, instrumentos, lecturas, limpieza, activos] = await Promise.all([
+      loadMaster(MASTER_KEYS.docTypes, false),
+      loadMaster(MASTER_KEYS.instrumentos, false),
+      loadMaster(MASTER_KEYS.lecturas, false),
+      loadMaster(MASTER_KEYS.limpieza, false),
+      loadMaster(MASTER_KEYS.activos, false),
+    ]);
+    DB.docTypes = docTypes;
     if(!DB.docTypes || DB.docTypes.length===0){
       DB.docTypes = DEFAULT_DOC_TYPE_NAMES.map(nombre=>({id:uid("dt"), nombre}));
       await saveMaster(MASTER_KEYS.docTypes, DB.docTypes);
     }
-    DB.instrumentos = await loadMaster(MASTER_KEYS.instrumentos, false);
-    DB.lecturas = await loadMaster(MASTER_KEYS.lecturas, false);
-    DB.limpieza = await loadMaster(MASTER_KEYS.limpieza, false);
-    DB.activos = await loadMaster(MASTER_KEYS.activos, false);
+    DB.instrumentos = instrumentos;
+    DB.lecturas = lecturas;
+    DB.limpieza = limpieza;
+    DB.activos = activos;
   }
 
   if(includeHeavy){
-    DB.documentos = await loadMaster(MASTER_KEYS.documentos, false);
-    DB.equipos = await loadMaster(MASTER_KEYS.equipos, false);
+    const [audits, documentos, equipos] = await Promise.all([
+      loadAuditsFromStorage(),
+      loadMaster(MASTER_KEYS.documentos, false),
+      loadMaster(MASTER_KEYS.equipos, false),
+    ]);
+    DB.audits = audits;
+    DB.documentos = documentos;
+    DB.equipos = equipos;
 
     await seedSyncVerificationData();
   }
@@ -7047,8 +7069,12 @@ const App = {
     favicon.rel = "icon";
     favicon.href = LOGO_DATA_URI;
     document.head.appendChild(favicon);
-    await loadAllDB();
+    // Arranque rápido: solo lo imprescindible para mostrar el login (incluye "config", que valida el PIN de admin).
+    // El resto (catálogos, auditorías con fotos, documentos, equipos) se precarga después, en segundo plano,
+    // sin bloquear la pantalla de ingreso.
+    await loadAllDB("light");
     this.showLogin();
+    loadAllDB("full").catch(e=>console.error("Error precargando datos en segundo plano:", e));
   },
   showLogin(){
     document.querySelector(".brandbar").classList.add("hidden");
