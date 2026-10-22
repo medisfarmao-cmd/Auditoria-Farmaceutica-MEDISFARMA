@@ -2859,6 +2859,15 @@ const AUTO_REFRESH_MS = 45000; // 45s (antes 20s, para reducir el consumo de dat
 let autoRefreshTimer = null;
 let isSyncing = false;
 
+// Actividad reciente del usuario (clic, tecla, toque) en cualquier parte de la app:
+// si acaba de interactuar, el refresco automático espera para no interrumpirlo
+// (p. ej. llenando varias celdas seguidas en la tabla de Hallazgos).
+let lastUserActivity = Date.now();
+const RECENT_ACTIVITY_GRACE_MS = 60000; // 60s sin interacción antes de permitir el refresco
+["mousedown","keydown","touchstart"].forEach(evt=>{
+  document.addEventListener(evt, ()=>{ lastUserActivity = Date.now(); }, {passive:true});
+});
+
 function isUserTyping(){
   const ae = document.activeElement;
   if(!ae) return false;
@@ -2888,6 +2897,7 @@ async function refreshCurrentView(level){
   if(!SESSION) return;
   if(isEditingAuditView()) return;
   if(isUserTyping()) return;
+  if(Date.now() - lastUserActivity < RECENT_ACTIVITY_GRACE_MS) return; // interacción muy reciente: no interrumpir
 
   await loadAllDB(level || "light");
 
@@ -4853,7 +4863,9 @@ async function renderHallazgos(){
   const el = document.getElementById("sub-hallazgos");
   const filterEstadoPrev = document.getElementById("ha_filterEstado") ? document.getElementById("ha_filterEstado").value : "";
   const filterSupPrev = document.getElementById("ha_filterSupervisor") ? document.getElementById("ha_filterSupervisor").value : "";
-  el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Sincronizando hallazgos desde las auditorías…</p>`;
+  const prevScroll = el.querySelector(".table-wrap") ? el.querySelector(".table-wrap").scrollTop : 0;
+  const isFirstRender = !el.querySelector(".table-wrap");
+  if(isFirstRender) el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Sincronizando hallazgos desde las auditorías…</p>`;
   await syncHallazgos();
 
   const isAdmin = SESSION && SESSION.role==="admin";
@@ -4938,6 +4950,8 @@ async function renderHallazgos(){
       ${!hasStorage ? `<p style="font-size:12px;color:var(--ink-soft);margin-top:10px;">Nota: el guardado no está disponible en este entorno; estos datos no se conservarán al cerrar.</p>` : ""}
     </div>
   `;
+  const newWrap = el.querySelector(".table-wrap");
+  if(newWrap && prevScroll) newWrap.scrollTop = prevScroll;
 }
 
 const hallazgosFormAbierto = new Set(); // ids de hallazgos con el formulario de subsanación abierto
