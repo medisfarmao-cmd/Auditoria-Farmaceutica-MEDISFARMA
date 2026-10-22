@@ -1193,9 +1193,14 @@ function ensureReviewFields(a){
   return a;
 }
 
-async function refreshAuditsFromStorage(){
+let lastAuditsFetchAt = 0;
+const AUDITS_FETCH_MIN_INTERVAL_MS = 30000; // evita re-descargar TODAS las actas (con fotos) si ya se trajeron hace menos de 30s, p.ej. al cambiar rápido entre Control/Hallazgos/Notificaciones
+async function refreshAuditsFromStorage(opts){
   if(!hasStorage) return; // sin almacenamiento compartido no hay nada que traer de otra sesión
+  const force = !!(opts && opts.force);
+  if(!force && (Date.now() - lastAuditsFetchAt) < AUDITS_FETCH_MIN_INTERVAL_MS) return;
   const remote = await loadAuditsFromStorage();
+  lastAuditsFetchAt = Date.now();
   const map = {};
   DB.audits.forEach(a=>map[a.id]=a);
   remote.forEach(a=>map[a.id]=a); // lo remoto es más reciente para los ids que ya existen
@@ -1606,6 +1611,7 @@ async function loadAllDB(level){
     DB.audits = audits;
     DB.documentos = documentos;
     DB.equipos = equipos;
+    lastAuditsFetchAt = Date.now();
 
     await seedSyncVerificationData();
   }
@@ -4031,8 +4037,8 @@ const AuditReview = {
    ========================================================= */
 async function renderNotificaciones(){
   const el = document.getElementById("notifContent");
-  el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Cargando notificaciones…</p>`;
-  await syncHallazgos();
+  // No se resincronizan actas completas (con fotos) solo para este contador:
+  // DB.hallazgos ya está cargado en memoria desde el arranque (colección liviana master:hallazgos).
   const isAdmin = SESSION && SESSION.role==="admin";
   const mySupervisorId = SESSION && SESSION.role==="supervisor" ? SESSION.id : null;
 
