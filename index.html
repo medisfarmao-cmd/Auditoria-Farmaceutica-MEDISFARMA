@@ -4859,14 +4859,21 @@ const Cronograma = {
 /* =========================================================
    SUPERVISORES · HALLAZGOS
    ========================================================= */
-async function renderHallazgos(){
+async function renderHallazgos(opts){
+  // skipSync=true: repinta al instante desde DB.hallazgos ya cargado en memoria, sin red
+  // (usarlo para filtrar, ordenar o repintar tras una acción local que ya actualizó DB.hallazgos).
+  // Sin skipSync: además trae auditorías nuevas desde Supabase y regenera los hallazgos
+  // (usarlo solo al entrar por primera vez a la pestaña o en el refresco periódico en segundo plano).
+  const skipSync = !!(opts && opts.skipSync);
   const el = document.getElementById("sub-hallazgos");
   const filterEstadoPrev = document.getElementById("ha_filterEstado") ? document.getElementById("ha_filterEstado").value : "";
   const filterSupPrev = document.getElementById("ha_filterSupervisor") ? document.getElementById("ha_filterSupervisor").value : "";
   const prevScroll = el.querySelector(".table-wrap") ? el.querySelector(".table-wrap").scrollTop : 0;
   const isFirstRender = !el.querySelector(".table-wrap");
-  if(isFirstRender) el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Sincronizando hallazgos desde las auditorías…</p>`;
-  await syncHallazgos();
+  if(!skipSync){
+    if(isFirstRender) el.innerHTML = `<p style="color:var(--ink-soft);font-size:13px;">Sincronizando hallazgos desde las auditorías…</p>`;
+    await syncHallazgos();
+  }
 
   const isAdmin = SESSION && SESSION.role==="admin";
   const mySupervisorId = SESSION && SESSION.role==="supervisor" ? SESSION.id : null;
@@ -4895,11 +4902,11 @@ async function renderHallazgos(){
       <h3>Hallazgos y plan de mejora (calificación "Con requerimiento" o "Inaceptable")</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">La normativa y la acción sugerida se generan automáticamente a partir de cada ítem del acta; puedes editarlas según el caso.</p>
       <div class="filters-row">
-        <select id="ha_filterEstado" onchange="renderHallazgos()">
+        <select id="ha_filterEstado" onchange="renderHallazgos({skipSync:true})">
           <option value="">Todos los estados</option>
           ${["Abierto","En gestión","Subsanado"].map(op=>`<option value="${op}" ${filterEstado===op?"selected":""}>${op}</option>`).join("")}
         </select>
-        <select id="ha_filterSupervisor" onchange="renderHallazgos()" ${mySupervisorId?"disabled":""}>
+        <select id="ha_filterSupervisor" onchange="renderHallazgos({skipSync:true})" ${mySupervisorId?"disabled":""}>
           <option value="">${isAdmin ? "Todos los supervisores" : "Mis puntos"}</option>
           ${isAdmin ? DB.supervisores.map(s=>`<option value="${s.id}" ${filterSup===s.id?"selected":""}>${esc(s.nombre)}</option>`).join("") : ""}
         </select>
@@ -4996,11 +5003,11 @@ const Hallazgos = {
     if(!DB.hallazgosEliminados.includes(id)) DB.hallazgosEliminados.push(id);
     await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
     await saveMaster(MASTER_KEYS.hallazgosEliminados, DB.hallazgosEliminados);
-    renderHallazgos();
+    renderHallazgos({skipSync:true});
   },
   toggleSubsanar(id){
     if(hallazgosFormAbierto.has(id)) hallazgosFormAbierto.delete(id); else hallazgosFormAbierto.add(id);
-    renderHallazgos();
+    renderHallazgos({skipSync:true});
   },
   async enviarSubsanacion(id){
     const h = DB.hallazgos.find(x=>x.id===id);
@@ -5029,7 +5036,7 @@ const Hallazgos = {
       accion: {tipo:"hallazgo", hallazgoId:id},
       icono: "📎"
     });
-    renderHallazgos();
+    renderHallazgos({skipSync:true});
     alert("Evidencia enviada. El administrador revisará y aprobará el cierre del hallazgo.");
   },
   async aprobarCierre(id){
@@ -5045,7 +5052,7 @@ const Hallazgos = {
       accion: {tipo:"hallazgo", hallazgoId:id},
       icono: "✅"
     });
-    renderHallazgos();
+    renderHallazgos({skipSync:true});
   },
   async rechazarCierre(id){
     const h = DB.hallazgos.find(x=>x.id===id);
@@ -5061,7 +5068,7 @@ const Hallazgos = {
       accion: {tipo:"hallazgo", hallazgoId:id},
       icono: "❌"
     });
-    renderHallazgos();
+    renderHallazgos({skipSync:true});
   }
 };
 
