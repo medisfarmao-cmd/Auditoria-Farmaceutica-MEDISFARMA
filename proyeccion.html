@@ -255,35 +255,53 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
 <!-- VIEW CONFIG -->
 <div id="view-config" class="view">
   <div class="card">
+    <div class="card-head"><span class="ch-icon">&#x1F550;</span><h3>Horario de trabajo</h3></div>
+    <div class="card-body">
+      <div class="cfg-block">
+        <div class="cfg-grid" style="grid-template-columns:repeat(2,minmax(160px,1fr));">
+          <label class="field-mini" style="display:flex;align-items:center;gap:8px;flex-direction:row;cursor:pointer;">
+            <input type="radio" name="horario" id="horario_8" value="8" checked style="width:auto;margin:0;">
+            <span>8 horas</span>
+          </label>
+          <label class="field-mini" style="display:flex;align-items:center;gap:8px;flex-direction:row;cursor:pointer;">
+            <input type="radio" name="horario" id="horario_12" value="12" style="width:auto;margin:0;">
+            <span>12 horas</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-head"><span class="ch-icon">&#x1F4D0;</span><h3>Parámetros operativos</h3></div>
     <div class="card-body">
       <div class="cfg-block">
         <div class="cfg-title">Cápita</div>
         <div class="cfg-grid">
-          <div class="field-mini"><label>% Población</label><input id="c_pct" type="number" value="30"></div>
-          <div class="field-mini"><label>Días hábiles/mes</label><input id="c_dias" type="number" value="25"></div>
-          <div class="field-mini"><label>Disp./auxiliar/día</label><input id="c_disp" type="number" value="50"></div>
-          <div class="field-mini"><label>Hab./punto</label><input id="c_hab_pt" type="number" value="40000"></div>
-          <div class="field-mini"><label>m²/colaborador</label><input id="c_m2" type="number" value="20"></div>
-          <div class="field-mini"><label>Hab./mensajero</label><input id="c_mens" type="number" value="30000"></div>
-          <div class="field-mini"><label>Form./regente/día</label><input id="c_reg_disp" type="number" value="20"></div>
-          <div class="field-mini"><label>Fórmulas/usuario</label><input id="c_form_usr" type="number" step="0.1" value="1.3"></div>
-          <div class="field-mini"><label>Umbral solo regente</label><input id="c_umbral_solo" type="number" value="30"></div>
-          <div class="field-mini"><label>Umbral reg. admin.</label><input id="c_umbral_admin" type="number" value="150"></div>
-          <div class="field-mini"><label>Pob. mín. mensajero</label><input id="c_umbral_mens" type="number" value="15000"></div>
-          <div class="field-mini"><label>Aux. base/1 audit.</label><input id="c_aux_audit" type="number" value="6"></div>
+          <div class="field-mini"><label>% Población</label><input id="c_pct" type="number"></div>
+          <div class="field-mini"><label>Días hábiles/mes</label><input id="c_dias" type="number"></div>
+          <div class="field-mini"><label>Disp./auxiliar/día</label><input id="c_disp" type="number"></div>
+          <div class="field-mini"><label>Hab./punto</label><input id="c_hab_pt" type="number"></div>
+          <div class="field-mini"><label>m²/colaborador</label><input id="c_m2" type="number"></div>
+          <div class="field-mini"><label>Hab./mensajero</label><input id="c_mens" type="number"></div>
+          <div class="field-mini"><label>Form./regente/día</label><input id="c_reg_disp" type="number"></div>
+          <input id="c_form_usr" type="hidden">
+          <div class="field-mini"><label>Umbral solo regente</label><input id="c_umbral_solo" type="number"></div>
+          <div class="field-mini"><label>Umbral reg. admin.</label><input id="c_umbral_admin" type="number"></div>
+          <div class="field-mini"><label>Pob. mín. mensajero</label><input id="c_umbral_mens" type="number"></div>
+          <div class="field-mini"><label>Aux. base/1 audit.</label><input id="c_aux_audit" type="number"></div>
         </div>
       </div>
       <div class="cfg-block">
         <div class="cfg-title">Evento</div>
         <div class="cfg-grid">
-          <div class="field-mini"><label>% Población</label><input id="e_pct" type="number" value="5"></div>
-          <div class="field-mini"><label>Días hábiles/mes</label><input id="e_dias" type="number" value="25"></div>
-          <div class="field-mini"><label>Disp./auxiliar/día</label><input id="e_disp" type="number" value="40"></div>
-          <div class="field-mini"><label>Hab./punto</label><input id="e_hab_pt" type="number" value="100000"></div>
-          <div class="field-mini"><label>m²/colaborador</label><input id="e_m2" type="number" value="18"></div>
-          <div class="field-mini"><label>Hab./mensajero</label><input id="e_mens" type="number" value="20000"></div>
-          <div class="field-mini"><label>Form./regente/día</label><input id="e_reg_disp" type="number" value="15"></div>
+          <div class="field-mini"><label>% Población</label><input id="e_pct" type="number"></div>
+          <div class="field-mini"><label>Días hábiles/mes</label><input id="e_dias" type="number"></div>
+          <div class="field-mini"><label>Disp./auxiliar/día</label><input id="e_disp" type="number"></div>
+          <div class="field-mini"><label>Hab./punto</label><input id="e_hab_pt" type="number"></div>
+          <div class="field-mini"><label>m²/colaborador</label><input id="e_m2" type="number"></div>
+          <div class="field-mini"><label>Hab./mensajero</label><input id="e_mens" type="number"></div>
+          <div class="field-mini"><label>Form./regente/día</label><input id="e_reg_disp" type="number"></div>
         </div>
       </div>
     </div>
@@ -293,9 +311,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
     <div class="card-head"><span class="ch-icon">&#x1F4B0;</span><h3>Nómina mensual (COP)</h3></div>
     <div class="card-body">
       <div class="cfg-grid">
-        <div class="field-mini"><label>Auxiliar farmacia</label><input id="p_aux" type="number" value="2900000"></div>
-        <div class="field-mini"><label>Regente farmacia</label><input id="p_reg" type="number" value="3780000"></div>
-        <div class="field-mini" style="grid-column:1/-1"><label>Mensajero</label><input id="p_men" type="number" value="3200000"></div>
+        <div class="field-mini"><label>Auxiliar farmacia</label><input id="p_aux" type="number"></div>
+        <div class="field-mini"><label>Regente farmacia</label><input id="p_reg" type="number"></div>
+        <div class="field-mini" style="grid-column:1/-1"><label>Mensajero</label><input id="p_men" type="number"></div>
       </div>
     </div>
   </div>
@@ -304,25 +322,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
     <div class="card-head"><span class="ch-icon">&#x1F3D7;&#xFE0F;</span><h3>Activos fijos (COP)</h3></div>
     <div class="card-body">
       <div class="cfg-grid">
-        <div class="field-mini"><label>PC</label><input id="a_pc" type="number" value="3700000"></div>
-        <div class="field-mini"><label>Silla ergonómica</label><input id="a_serg" type="number" value="120000"></div>
-        <div class="field-mini"><label>Impresora POS</label><input id="a_pos" type="number" value="250000"></div>
-        <div class="field-mini"><label>Escáner</label><input id="a_scan" type="number" value="340000"></div>
-        <div class="field-mini"><label>Front atención</label><input id="a_front" type="number" value="350000"></div>
-        <div class="field-mini"><label>Aviso exterior</label><input id="a_aviso" type="number" value="100000"></div>
-        <div class="field-mini"><label>Camilla emergencia</label><input id="a_camilla" type="number" value="130000"></div>
-        <div class="field-mini"><label>Botiqín</label><input id="a_botiquin" type="number" value="30000"></div>
-        <div class="field-mini"><label>Kit de derrame</label><input id="a_derrame" type="number" value="60000"></div>
-        <div class="field-mini"><label>Extintor</label><input id="a_extintor" type="number" value="45000"></div>
-        <div class="field-mini"><label>Estante</label><input id="a_estante" type="number" value="100000"></div>
-        <div class="field-mini"><label>Nevera</label><input id="a_nevera" type="number" value="2000000"></div>
-        <div class="field-mini"><label>Estiba (c/u)</label><input id="a_estiba" type="number" value="20000"></div>
-        <div class="field-mini"><label>Escalerilla</label><input id="a_escal" type="number" value="80000"></div>
-        <div class="field-mini"><label>Punto ecológico</label><input id="a_eco" type="number" value="170000"></div>
-        <div class="field-mini"><label>Señalética</label><input id="a_senal" type="number" value="120000"></div>
-        <div class="field-mini"><label>Mesa recepción</label><input id="a_mesa" type="number" value="130000"></div>
-        <div class="field-mini"><label>Imp. multifuncional</label><input id="a_impm" type="number" value="600000"></div>
-        <div class="field-mini"><label>Silla de espera</label><input id="a_sesp" type="number" value="80000"></div>
+        <div class="field-mini"><label>PC</label><input id="a_pc" type="number"></div>
+        <div class="field-mini"><label>Silla ergonómica</label><input id="a_serg" type="number"></div>
+        <div class="field-mini"><label>Impresora POS</label><input id="a_pos" type="number"></div>
+        <div class="field-mini"><label>Escáner</label><input id="a_scan" type="number"></div>
+        <div class="field-mini"><label>Front atención</label><input id="a_front" type="number"></div>
+        <div class="field-mini"><label>Aviso exterior</label><input id="a_aviso" type="number"></div>
+        <div class="field-mini"><label>Camilla emergencia</label><input id="a_camilla" type="number"></div>
+        <div class="field-mini"><label>Botiqín</label><input id="a_botiquin" type="number"></div>
+        <div class="field-mini"><label>Kit de derrame</label><input id="a_derrame" type="number"></div>
+        <div class="field-mini"><label>Extintor</label><input id="a_extintor" type="number"></div>
+        <div class="field-mini"><label>Estante</label><input id="a_estante" type="number"></div>
+        <div class="field-mini"><label>Nevera</label><input id="a_nevera" type="number"></div>
+        <div class="field-mini"><label>Estiba (c/u)</label><input id="a_estiba" type="number"></div>
+        <div class="field-mini"><label>Escalerilla</label><input id="a_escal" type="number"></div>
+        <div class="field-mini"><label>Punto ecológico</label><input id="a_eco" type="number"></div>
+        <div class="field-mini"><label>Señalética</label><input id="a_senal" type="number"></div>
+        <div class="field-mini"><label>Mesa recepción</label><input id="a_mesa" type="number"></div>
+        <div class="field-mini"><label>Imp. multifuncional</label><input id="a_impm" type="number"></div>
+        <div class="field-mini"><label>Silla de espera</label><input id="a_sesp" type="number"></div>
       </div>
     </div>
   </div>
@@ -345,6 +363,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-
 var munis = [];
 var muniCount = 0;
 var lastResultados = [];
+
+/* ── ROL ──
+   El rol llega como parámetro en la URL del iframe (?rol=director), asignado
+   por la app principal según la sesión activa. Solo el rol "director" puede
+   ver los valores en pesos ($) de activos fijos y nómina en el reporte oficial;
+   el resto de roles solo ve las cantidades requeridas. */
+var IS_DIRECTOR = (function(){
+  try {
+    var p = new URLSearchParams(window.location.search);
+    return p.get('rol') === 'director';
+  } catch(e) { return false; }
+})();
 
 /* ── TABS ── */
 function showView(v) {
@@ -457,34 +487,41 @@ function showToast(msg) {
   setTimeout(function(){ t.classList.remove('show'); },3000);
 }
 
-/* ── CONFIG ── */
-function iv(id){ var e=document.getElementById(id); return e?(parseInt(e.value)||0):0; }
-function fv(id){ var e=document.getElementById(id); return e?(parseFloat(e.value)||0):0; }
+/* ── CONFIG ──
+   Las casillas de Variables se dejan vacías por defecto; si la casilla está vacía
+   o no es un número válido, se usa el valor por defecto (def) sin mostrarlo en la casilla. */
+function iv(id,def){ def=def||0; var e=document.getElementById(id); if(!e) return def; var v=parseInt(e.value); return isNaN(v)?def:v; }
+function fv(id,def){ def=def||0; var e=document.getElementById(id); if(!e) return def; var v=parseFloat(e.value); return isNaN(v)?def:v; }
+function getHorario() {
+  var r=document.querySelector('input[name="horario"]:checked');
+  return r?r.value:'8';
+}
 function getConfig() {
   return {
-    capita:{pct:fv('c_pct'),dias:iv('c_dias'),disp:iv('c_disp'),habPunto:iv('c_hab_pt'),
-            m2:iv('c_m2'),habMens:iv('c_mens'),regDisp:iv('c_reg_disp'),formPorUsr:fv('c_form_usr'),
-            umbralSolo:iv('c_umbral_solo'),umbralAdmin:iv('c_umbral_admin'),
-            umbralMens:iv('c_umbral_mens'),auxPorAudit:iv('c_aux_audit')},
-    evento:{pct:fv('e_pct'),dias:iv('e_dias'),disp:iv('e_disp'),habPunto:iv('e_hab_pt'),
-            m2:iv('e_m2'),habMens:iv('e_mens'),regDisp:iv('e_reg_disp'),formPorUsr:fv('c_form_usr'),
-            umbralSolo:iv('c_umbral_solo'),umbralAdmin:iv('c_umbral_admin'),
-            umbralMens:iv('c_umbral_mens'),auxPorAudit:iv('c_aux_audit')},
-    nom:{aux:iv('p_aux'),reg:iv('p_reg'),men:iv('p_men')},
-    act:{pc:iv('a_pc'),serg:iv('a_serg'),pos:iv('a_pos'),scan:iv('a_scan'),
-         front:iv('a_front'),aviso:iv('a_aviso'),camilla:iv('a_camilla'),
-         botiquin:iv('a_botiquin'),derrame:iv('a_derrame'),extintor:iv('a_extintor'),
-         estante:iv('a_estante'),nevera:iv('a_nevera'),estiba:iv('a_estiba'),
-         escal:iv('a_escal'),eco:iv('a_eco'),senal:iv('a_senal'),
-         mesa:iv('a_mesa'),impm:iv('a_impm'),sesp:iv('a_sesp')}
+    horario:getHorario(),
+    capita:{pct:fv('c_pct',30),dias:iv('c_dias',25),disp:iv('c_disp',50),habPunto:iv('c_hab_pt',40000),
+            m2:iv('c_m2',20),habMens:iv('c_mens',30000),regDisp:iv('c_reg_disp',20),formPorUsr:fv('c_form_usr',1.6),
+            umbralSolo:iv('c_umbral_solo',30),umbralAdmin:iv('c_umbral_admin',150),
+            umbralMens:iv('c_umbral_mens',15000),auxPorAudit:iv('c_aux_audit',6)},
+    evento:{pct:fv('e_pct',5),dias:iv('e_dias',25),disp:iv('e_disp',40),habPunto:iv('e_hab_pt',100000),
+            m2:iv('e_m2',18),habMens:iv('e_mens',20000),regDisp:iv('e_reg_disp',15),formPorUsr:fv('c_form_usr',1.6),
+            umbralSolo:iv('c_umbral_solo',30),umbralAdmin:iv('c_umbral_admin',150),
+            umbralMens:iv('c_umbral_mens',15000),auxPorAudit:iv('c_aux_audit',6)},
+    nom:{aux:iv('p_aux',2900000),reg:iv('p_reg',3780000),men:iv('p_men',3200000)},
+    act:{pc:iv('a_pc',3700000),serg:iv('a_serg',120000),pos:iv('a_pos',250000),scan:iv('a_scan',340000),
+         front:iv('a_front',350000),aviso:iv('a_aviso',100000),camilla:iv('a_camilla',130000),
+         botiquin:iv('a_botiquin',30000),derrame:iv('a_derrame',60000),extintor:iv('a_extintor',45000),
+         estante:iv('a_estante',100000),nevera:iv('a_nevera',2000000),estiba:iv('a_estiba',20000),
+         escal:iv('a_escal',80000),eco:iv('a_eco',170000),senal:iv('a_senal',120000),
+         mesa:iv('a_mesa',130000),impm:iv('a_impm',600000),sesp:iv('a_sesp',80000)}
   };
 }
 
 /* ── CALC ENGINE ── */
-function calcContrato(pob, c) {
+function calcContrato(pob, c, horario) {
   var pobObj      = Math.round(pob * c.pct / 100);
   var pts         = Math.ceil(pob / c.habPunto);
-  var fpu         = c.formPorUsr || 1.3;
+  var fpu         = 1.6; /* promedio de fórmulas/usuario — valor fijo del sistema */
   var umbSolo     = c.umbralSolo  || 20;
   var umbAdmin    = c.umbralAdmin || 150;
   var umbMens     = c.umbralMens  || 13000;
@@ -518,6 +555,14 @@ function calcContrato(pob, c) {
     var formParaAux = Math.max(0, formPunto - c.regDisp);
     aux = Math.ceil(formParaAux / c.disp);
     capTotal = c.regDisp + aux * c.disp;
+  }
+
+  /* ── Horario de trabajo: jornada de 12h requiere ~1.5x auxiliares de dispensación
+     (rotación/cobertura de turnos), sin incluir al auxiliar de auditoría ── */
+  var ventanillas = aux;
+  if (horario === '12' && aux > 0) {
+    aux = Math.ceil(aux * 1.5);
+    ventanillas = aux;
   }
 
   /* ── Auxiliar de auditoría: 1 por cada 8 aux base ── */
@@ -554,9 +599,9 @@ function calcContrato(pob, c) {
 
   return {
     pobObj:pobObj, pts:pts, fpu:fpu,
-    usrPunto:usrPunto, formPunto:formPunto,
+    usrPunto:usrPunto, usrDiaTot:usrDiaTot, formPunto:formPunto, formDiaTot:formDiaTot,
     capMaxUsr:capMaxUsr, capTotal:capTotal,
-    aux:aux, auxAudit:auxAudit, auxTotal:auxTotal,
+    aux:aux, ventanillas:ventanillas, auxAudit:auxAudit, auxTotal:auxTotal,
     regDisp:regDisp, regSolo:regSolo,
     colEnPunto:colEnPunto, m2:m2, m2Note:m2Note,
     mens:mens, totalCol:totalCol,
@@ -605,7 +650,7 @@ function calcNomina(r, pts, nom) {
 function calcMunicipio(nombre, pob, tipo, cfg) {
   var res={nombre:nombre,pob:pob,tipo:tipo};
   function build(c) {
-    var r=calcContrato(pob,c);
+    var r=calcContrato(pob,c,cfg.horario);
     var pp=Math.ceil(pob/r.pts);  /* poblacion TOTAL por punto */
     var act=calcActivos(r,pp,cfg.act);
     var tas=act.total+r.sillas*cfg.act.sesp;
@@ -680,10 +725,14 @@ function renderContrato(d, isCapita) {
   var actRows='';
   for (var i=0;i<d.activos.length;i++) {
     var it=d.activos[i];
-    actRows+='<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>';
+    actRows+=IS_DIRECTOR
+      ?'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>'
+      :'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td></tr>';
   }
-  var sesp=iv('a_sesp');
-  actRows+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>';
+  var sesp=iv('a_sesp',80000);
+  actRows+=IS_DIRECTOR
+    ?'<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>'
+    :'<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td></tr>';
 
   var auditRow='';
   if (d.auxAudit>0) {
@@ -707,24 +756,27 @@ function renderContrato(d, isCapita) {
   h+='<div class="kpi-grid">';
   h+='<div class="kpi '+(isCapita?'blue':'green')+'"><div class="kpi-val">'+num(d.pts)+'</div><div class="kpi-lbl">Puntos</div></div>';
   h+='<div class="kpi '+(isCapita?'blue':'green')+'"><div class="kpi-val">'+num(d.totalCol)+'</div><div class="kpi-lbl">Colaboradores</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.usrDiaTot))+'</div><div class="kpi-lbl">Usuarios totales/d\u00eda</div></div>';
   h+='<div class="kpi"><div class="kpi-val">'+dec(d.usrPunto)+'</div><div class="kpi-lbl">Usuarios/d\u00eda/pto</div></div>';
   h+='<div class="kpi"><div class="kpi-val">'+dec(d.formPunto)+'</div><div class="kpi-lbl">F\u00f3rmulas/d\u00eda/pto</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.formDiaTot))+'</div><div class="kpi-lbl">F\u00f3rmulas totales/d\u00eda</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(d.ventanillas)+'</div><div class="kpi-lbl">Ventanillas atenci\u00f3n/pto</div></div>';
   h+='</div>';
 
   h+='<div class="section-label">Atenci\u00f3n diaria</div>';
   h+='<table class="mini-table" style="margin-bottom:8px"><thead><tr><th>Indicador</th><th class="num">Valor</th></tr></thead><tbody>';
-  h+='<tr><td>Usuarios / d\u00eda</td><td class="num">'+dec(d.usrPunto)+'</td></tr>';
-  h+='<tr><td>Prom. f\u00f3rmulas / usuario</td><td class="num">'+dec(d.fpu,2)+'</td></tr>';
-  h+='<tr><td>F\u00f3rmulas / d\u00eda</td><td class="num">'+dec(d.formPunto)+'</td></tr>';
+  h+='<tr><td>Usuarios / d\u00eda (por punto)</td><td class="num">'+dec(d.usrPunto)+'</td></tr>';
+  h+='<tr><td>Usuarios totales / d\u00eda (red)</td><td class="num">'+num(Math.round(d.usrDiaTot))+'</td></tr>';
+  h+='<tr><td>F\u00f3rmulas totales / d\u00eda (por punto)</td><td class="num">'+dec(d.formPunto)+'</td></tr>';
+  h+='<tr><td>F\u00f3rmulas totales / d\u00eda (red)</td><td class="num">'+num(Math.round(d.formDiaTot))+'</td></tr>';
   h+='<tr><td>Capacidad operativa / d\u00eda</td><td class="num">'+num(d.capTotal)+'</td></tr>';
-  h+='<tr><td>Cap. m\u00e1x. usuarios (+30%)</td><td class="num">'+num(d.capMaxUsr)+'</td></tr>';
   h+='<tr><td>Metraje por punto</td><td class="num">'+num(d.m2)+' m\u00b2</td></tr>';
   h+='<tr><td>Sillas de espera</td><td class="num">'+num(d.sillas)+'</td></tr>';
   h+='</tbody></table>'+m2Html;
 
   h+='<div class="section-label">Personal</div>';
   h+='<table class="mini-table" style="margin-bottom:4px"><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">Total red</th></tr></thead><tbody>';
-  h+='<tr><td>Aux. farmacia (dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
+  h+='<tr><td>Ventanillas de atenci\u00f3n (aux. dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
   h+=auditRow;
   h+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+d.pts+'</td></tr>';
   h+=mensRow;
@@ -733,18 +785,31 @@ function renderContrato(d, isCapita) {
 
   h+='<div class="section-label">Activos por punto &nbsp;<span style="font-size:10px;font-weight:600">PC: '+d.pcPt+' ('+d.auxTotal+' aux + 1 reg)</span></div>';
   h+='<div style="overflow-x:auto"><table class="mini-table">';
-  h+='<thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead>';
-  h+='<tbody>'+actRows+'</tbody><tfoot>';
-  h+='<tr class="'+tc+'"><td colspan="3"><strong>Total / punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
-  h+='<tr class="tr-sub"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
-  h+='</tfoot></table></div>';
+  if (IS_DIRECTOR) {
+    h+='<thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead>';
+    h+='<tbody>'+actRows+'</tbody><tfoot>';
+    h+='<tr class="'+tc+'"><td colspan="3"><strong>Total / punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
+    h+='<tr class="tr-sub"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
+    h+='</tfoot></table></div>';
+  } else {
+    h+='<thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead>';
+    h+='<tbody>'+actRows+'</tbody></table></div>';
+  }
 
   h+='<div class="section-label">N\u00f3mina mensual</div>';
-  h+='<table class="mini-table"><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
-  h+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
-  h+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
-  h+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
-  h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+  if (IS_DIRECTOR) {
+    h+='<table class="mini-table"><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
+    h+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
+    h+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
+    h+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
+    h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+  } else {
+    h+='<table class="mini-table"><thead><tr><th>Cargo</th><th class="num">Cant.</th></tr></thead><tbody>';
+    h+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td></tr>';
+    h+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td></tr>';
+    h+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td></tr>';
+    h+='</tbody></table>';
+  }
   h+=warnHtml;
   h+='</div>';
   return h;
@@ -782,23 +847,28 @@ function buildConsolidado() {
     if (r.evento) cts.push({d:r.evento,lbl:'Evento'});
     for (var j=0;j<cts.length;j++) {
       var d=cts[j].d;
-      rows.push({
+      var row={
         'Municipio':r.nombre,'Contrato':cts[j].lbl,
         'Poblaci\u00f3n':r.pob,'Pob. objetivo':d.pobObj,
-        'Puntos':d.pts,'Usuarios/d\u00eda/pto':parseFloat(dec(d.usrPunto)),
+        'Puntos':d.pts,'Usuarios totales/d\u00eda':Math.round(d.usrDiaTot),
+        'Usuarios/d\u00eda/pto':parseFloat(dec(d.usrPunto)),
         'F\u00f3rmulas/d\u00eda/pto':parseFloat(dec(d.formPunto)),
-        'Cap.max usuarios':d.capMaxUsr,
+        'F\u00f3rmulas totales/d\u00eda':Math.round(d.formDiaTot),
+        'Ventanillas atenci\u00f3n/pto':d.ventanillas,
         'Aux.dispensaci\u00f3n/pto':d.aux,'Aux.auditor\u00eda/pto':d.auxAudit,
         'Aux.total/pto':d.auxTotal,'Regentes red':d.pts,'Mensajeros':d.mens,
         'Total colaboradores':d.totalCol,'Metraje m\u00b2':d.m2,
-        'Sillas espera/pto':d.sillas,'PC/pto':d.pcPt,
-        'Activos/pto $':Math.round(d.totalAct),
-        'Inversi\u00f3n total $':Math.round(d.invTotal),
-        'N\u00f3mina total $':Math.round(d.nom.total),
-        'N\u00f3mina aux $':Math.round(d.nom.cAux),
-        'N\u00f3mina reg $':Math.round(d.nom.cReg),
-        'N\u00f3mina mens $':Math.round(d.nom.cMen)
-      });
+        'Sillas espera/pto':d.sillas,'PC/pto':d.pcPt
+      };
+      if (IS_DIRECTOR) {
+        row['Activos/pto $']=Math.round(d.totalAct);
+        row['Inversi\u00f3n total $']=Math.round(d.invTotal);
+        row['N\u00f3mina total $']=Math.round(d.nom.total);
+        row['N\u00f3mina aux $']=Math.round(d.nom.cAux);
+        row['N\u00f3mina reg $']=Math.round(d.nom.cReg);
+        row['N\u00f3mina mens $']=Math.round(d.nom.cMen);
+      }
+      rows.push(row);
     }
   }
   return rows;
@@ -815,20 +885,28 @@ function buildActivosDetalle() {
       var d=cts[j].d;
       for (var k=0;k<d.activos.length;k++) {
         var it=d.activos[k];
-        rows.push({
+        var actRow={
           'Municipio':r.nombre,'Contrato':cts[j].lbl,
-          'Activo':it[0],'Cantidad por punto':it[1],
-          'Valor unitario':it[2],'Subtotal por punto':it[1]*it[2],
-          'N\u00fa puntos':d.pts,'Total red':it[1]*it[2]*d.pts
-        });
+          'Activo':it[0],'Cantidad por punto':it[1],'N\u00fa puntos':d.pts
+        };
+        if (IS_DIRECTOR) {
+          actRow['Valor unitario']=it[2];
+          actRow['Subtotal por punto']=it[1]*it[2];
+          actRow['Total red']=it[1]*it[2]*d.pts;
+        }
+        rows.push(actRow);
       }
-      var sesp=iv('a_sesp');
-      rows.push({
+      var sesp=iv('a_sesp',80000);
+      var sespRow={
         'Municipio':r.nombre,'Contrato':cts[j].lbl,
-        'Activo':'Silla de espera','Cantidad por punto':d.sillas,
-        'Valor unitario':sesp,'Subtotal por punto':d.sillas*sesp,
-        'N\u00fa puntos':d.pts,'Total red':d.sillas*sesp*d.pts
-      });
+        'Activo':'Silla de espera','Cantidad por punto':d.sillas,'N\u00fa puntos':d.pts
+      };
+      if (IS_DIRECTOR) {
+        sespRow['Valor unitario']=sesp;
+        sespRow['Subtotal por punto']=d.sillas*sesp;
+        sespRow['Total red']=d.sillas*sesp*d.pts;
+      }
+      rows.push(sespRow);
     }
   }
   return rows;
@@ -859,17 +937,19 @@ function exportarExcel() {
       pivotMap[key].subtotal+= Number(rows2[i]['Subtotal por punto']) || 0;
       pivotMap[key].totalRed+= Number(rows2[i]['Total red']) || 0;
     }
-    var pivotArr=[['Activo','Suma Cantidad (red)','Suma Subtotal/pto','Suma Total Red $']];
+    var pivotArr=IS_DIRECTOR
+      ?[['Activo','Suma Cantidad (red)','Suma Subtotal/pto','Suma Total Red $']]
+      :[['Activo','Suma Cantidad (red)']];
     var gCant=0, gSub=0, gRed=0;
     var keys=Object.keys(pivotMap).sort();
     for (var i=0;i<keys.length;i++) {
       var k=keys[i], v=pivotMap[k];
-      pivotArr.push([k, v.cant, v.subtotal, v.totalRed]);
+      pivotArr.push(IS_DIRECTOR?[k, v.cant, v.subtotal, v.totalRed]:[k, v.cant]);
       gCant+=v.cant; gSub+=v.subtotal; gRed+=v.totalRed;
     }
-    pivotArr.push(['TOTAL GENERAL', gCant, gSub, gRed]);
+    pivotArr.push(IS_DIRECTOR?['TOTAL GENERAL', gCant, gSub, gRed]:['TOTAL GENERAL', gCant]);
     var ws2=XLSX.utils.aoa_to_sheet(pivotArr);
-    ws2['!cols']=[{wch:30},{wch:20},{wch:20},{wch:20}];
+    ws2['!cols']=IS_DIRECTOR?[{wch:30},{wch:20},{wch:20},{wch:20}]:[{wch:30},{wch:20}];
     XLSX.utils.book_append_sheet(wb, ws2, 'Resumen Activos');
 
     /* Hoja 3: Activos detalle (fuente) */
@@ -954,15 +1034,17 @@ function exportarPDF() {
 
     for (var ci=0;ci<cts.length;ci++) {
       var d=cts[ci].d, isC=cts[ci].isC;
-      var sesp=iv('a_sesp');
+      var sesp=iv('a_sesp',80000);
       body+='<div class="contrato-block">';
       body+='<div class="ct-label'+(isC?'':' ev')+'">'+(isC?'Contrato C\u00e1pita':'Contrato Evento')+'</div>';
 
       body+='<div class="kpi-row">';
       body+='<div class="kpi-box"><div class="kv'+(isC?'':' g')+'">'+num(d.pts)+'</div><div class="kl">Puntos</div></div>';
       body+='<div class="kpi-box"><div class="kv'+(isC?'':' g')+'">'+num(d.totalCol)+'</div><div class="kl">Colaboradores</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.usrDiaTot))+'</div><div class="kl">Usr. totales/d\u00eda</div></div>';
       body+='<div class="kpi-box"><div class="kv">'+dec(d.usrPunto)+'</div><div class="kl">Usr/d\u00eda/pto</div></div>';
       body+='<div class="kpi-box"><div class="kv">'+dec(d.formPunto)+'</div><div class="kl">Form/d\u00eda/pto</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.formDiaTot))+'</div><div class="kl">Form. totales/d\u00eda</div></div>';
       body+='<div class="kpi-box"><div class="kv">'+d.m2+' m\u00b2</div><div class="kl">Metraje</div></div>';
       body+='</div>';
 
@@ -970,30 +1052,48 @@ function exportarPDF() {
 
       body+='<div class="sec-title">Personal</div>';
       body+='<table><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">Total red</th></tr></thead><tbody>';
-      body+='<tr><td>Aux. farmacia (dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
+      body+='<tr><td>Ventanillas de atenci\u00f3n (aux. dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
       if (d.auxAudit>0) body+='<tr><td>Aux. farmacia (auditor\u00eda)</td><td class="num">'+d.auxAudit+'</td><td class="num">'+(d.auxAudit*d.pts)+'</td></tr>';
       body+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+d.pts+'</td></tr>';
       body+='<tr><td>Mensajero</td><td class="num">&mdash;</td><td class="num">'+(d.mens>0?d.mens:'No aplica')+'</td></tr>';
       body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total</strong></td><td class="num"><strong>'+num(d.totalCol)+'</strong></td></tr></tfoot></table>';
 
       body+='<div class="sec-title">Activos fijos por punto</div>';
-      body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead><tbody>';
-      for (var k=0;k<d.activos.length;k++) {
-        var it=d.activos[k];
-        body+='<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>';
+      if (IS_DIRECTOR) {
+        body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead><tbody>';
+        for (var k=0;k<d.activos.length;k++) {
+          var it=d.activos[k];
+          body+='<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>';
+        }
+        body+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>';
+        body+='</tbody><tfoot>';
+        body+='<tr class="total-row'+(isC?'':' g')+'"><td colspan="3"><strong>Total por punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
+        body+='<tr class="inv-row"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
+        body+='</tfoot></table>';
+      } else {
+        body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead><tbody>';
+        for (var k2=0;k2<d.activos.length;k2++) {
+          var it2=d.activos[k2];
+          body+='<tr><td>'+it2[0]+'</td><td class="num">'+it2[1]+'</td></tr>';
+        }
+        body+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td></tr>';
+        body+='</tbody></table>';
       }
-      body+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>';
-      body+='</tbody><tfoot>';
-      body+='<tr class="total-row'+(isC?'':' g')+'"><td colspan="3"><strong>Total por punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
-      body+='<tr class="inv-row"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
-      body+='</tfoot></table>';
 
       body+='<div class="sec-title">N\u00f3mina mensual</div>';
-      body+='<table><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
-      body+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
-      body+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
-      body+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
-      body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+      if (IS_DIRECTOR) {
+        body+='<table><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
+        body+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
+        body+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
+        body+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
+        body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+      } else {
+        body+='<table><thead><tr><th>Cargo</th><th class="num">Cant.</th></tr></thead><tbody>';
+        body+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td></tr>';
+        body+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td></tr>';
+        body+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td></tr>';
+        body+='</tbody></table>';
+      }
 
       body+='</div>'; /* end contrato-block */
     }
