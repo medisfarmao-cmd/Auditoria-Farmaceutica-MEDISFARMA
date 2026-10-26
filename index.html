@@ -7509,7 +7509,13 @@ const App = {
   },
   loadTurnosFrame(iframeId){
     const f = document.getElementById(iframeId);
-    if(f && !f.src && f.dataset.src) f.src = f.dataset.src;
+    if(!f || f.src || !f.dataset.src) return;
+    let src = f.dataset.src;
+    if(iframeId==="proyeccionFrame" || iframeId==="puntoProyeccionFrame"){
+      const rol = (SESSION && SESSION.role==="admin") ? "director" : "otro";
+      src += (src.indexOf("?")>=0?"&":"?") + "rol=" + encodeURIComponent(rol);
+    }
+    f.src = src;
   },
   currentNotifSub: "actividad",
   showNotifSub(sub){
