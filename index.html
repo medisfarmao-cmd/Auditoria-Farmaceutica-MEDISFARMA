@@ -2863,11 +2863,9 @@ async function exportTempMonthlyPDF(instrumentId, year, month){
   `;
   document.body.appendChild(container);
   try{
-    const canvas = await html2canvas(container, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
-    const imgData = canvas.toDataURL("image/jpeg", 0.80);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p","mm","a4");
-    addPagedImageWithMargins(pdf, imgData, canvas);
+    await renderElementToPagedPdf(pdf, container);
     const nombre = (point?point.nombre:"punto").replace(/[^a-zA-Z0-9]+/g,"_");
     pdf.save(`Temperatura_${nombre}_${year}-${String(month+1).padStart(2,"0")}.pdf`);
   }catch(e){
@@ -3811,25 +3809,94 @@ function clearSignaturePad(key){
 /* =========================================================
    EXPORTAR PDF (html2canvas + jsPDF)
    ========================================================= */
-/* ---- Paginado de PDF con márgenes de 2cm por lado (documento formal), función global reutilizada por los 3 generadores ---- */
-function addPagedImageWithMargins(pdf, imgData, canvas){
+/* ---- Paginado "inteligente" de PDF (documento formal), función global reutilizada por los
+   generadores de PDF de la app. Márgenes de 2cm por lado (supera el mínimo de 1.5cm al pie de
+   página). A diferencia de la versión anterior —que tomaba la captura completa de la pantalla y
+   la cortaba cada X milímetros de forma puramente mecánica, partiendo filas de tabla, palabras y
+   encabezados a la mitad entre una hoja y la siguiente—, esta versión mide los elementos reales
+   del documento (filas de tabla, encabezados de sección, tarjetas de foto, bloques de firma) y
+   ajusta cada corte de página para que caiga SIEMPRE en un espacio entre elementos, nunca en
+   medio de uno. También corrige que el contenido llegaba hasta el borde físico de la hoja sin
+   dejar margen inferior real. */
+async function renderElementToPagedPdf(pdf, el){
   const pageWidth = 210, pageHeight = 297;
-  const margin = 20; // 2 cm en mm, por los 4 lados
-  const contentWidth = pageWidth - margin*2;
-  const contentHeightPerPage = pageHeight - margin*2;
-  const imgWidth = contentWidth;
-  const imgHeight = canvas.height * imgWidth / canvas.width;
+  const margin = 20; // 2 cm en mm, por los 4 lados (el mínimo pedido era 1.5cm)
+  const contentWidthMm = pageWidth - margin*2;
+  const contentHeightPerPageMm = pageHeight - margin*2;
 
-  let heightLeft = imgHeight;
-  let position = margin;
-  pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
-  heightLeft -= contentHeightPerPage;
+  const canvas = await html2canvas(el, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
+  const pxPerMm = canvas.width / contentWidthMm;
+  const contentHeightPerPagePx = contentHeightPerPageMm * pxPerMm;
 
-  while(heightLeft > 0){
-    position = margin - (imgHeight - heightLeft);
-    pdf.addPage();
-    pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
-    heightLeft -= contentHeightPerPage;
+  // Zonas que NUNCA se deben cortar a la mitad: filas de tabla, tarjetas de foto, bloques de
+  // firma, y los encabezados de sección (amarrados con el elemento que sigue para que un título
+  // nunca quede solo justo al final de una hoja, sin nada debajo).
+  const domScale = canvas.width / el.scrollWidth;
+  const elRect = el.getBoundingClientRect();
+  let zones = [];
+  el.querySelectorAll("tr, h2, h3, h4, .sig-section-title, .sigblock, .photo-card, .concepto-box, .kpi-card").forEach(node=>{
+    const rect = node.getBoundingClientRect();
+    let top = (rect.top - elRect.top) * domScale;
+    let bottom = (rect.bottom - elRect.top) * domScale;
+    if(/^H[234]$/.test(node.tagName) || node.classList.contains("sig-section-title")){
+      // Amarra el encabezado solo con su fila de columnas + la primera fila de datos que le
+      // sigue (no con la tabla completa), para que nunca quede solo al pie de una hoja sin
+      // nada debajo, sin por eso forzar TODA la sección a una sola hoja.
+      const next = node.nextElementSibling;
+      if(next){
+        const rows = next.querySelectorAll ? next.querySelectorAll("tr") : [];
+        const target = rows.length ? rows[Math.min(1, rows.length - 1)] : next;
+        const trect = target.getBoundingClientRect();
+        bottom = Math.max(bottom, (trect.bottom - elRect.top) * domScale);
+      }
+    }
+    if(bottom > top) zones.push([top, bottom]);
+  });
+  // Ordenadas de menor a mayor inicio. OJO: no se "fusionan" zonas contiguas/tocándose entre sí
+  // (p.ej. filas de tabla seguidas, borde con borde) — fusionarlas convertiría una tabla entera
+  // en un solo bloque indivisible. Cortar exactamente en el límite entre dos filas es seguro;
+  // solo se evita cortar DENTRO de una zona.
+  zones.sort((a,b)=>a[0]-b[0]);
+
+  // Calcula los puntos de corte: si el corte natural (cada contentHeightPerPagePx) cae dentro de
+  // una zona protegida, se retrocede hasta el borde superior de esa zona, dejando el elemento
+  // completo para la hoja siguiente. Como las zonas están ordenadas por inicio, la primera que
+  // contenga el corte ya es la de inicio más temprano que lo afecta.
+  const breaks = [0];
+  let cursor = 0;
+  while(cursor < canvas.height - 1){
+    let next = Math.min(cursor + contentHeightPerPagePx, canvas.height);
+    let guard = 0;
+    let adjusted = true;
+    while(adjusted && guard < 50){
+      adjusted = false; guard++;
+      for(const [a,b] of zones){
+        if(next > a && next < b && a > cursor + 10){
+          next = a;
+          adjusted = true;
+          break;
+        }
+      }
+    }
+    if(next <= cursor) next = Math.min(cursor + contentHeightPerPagePx, canvas.height); // seguridad anti-bucle
+    breaks.push(next);
+    cursor = next;
+  }
+
+  const sliceCanvas = document.createElement("canvas");
+  const sctx = sliceCanvas.getContext("2d");
+  for(let i=0; i<breaks.length-1; i++){
+    const yStart = Math.round(breaks[i]), yEnd = Math.round(breaks[i+1]);
+    const sliceHeightPx = Math.max(1, yEnd - yStart);
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = sliceHeightPx;
+    sctx.fillStyle = "#ffffff";
+    sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    sctx.drawImage(canvas, 0, yStart, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+    const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.85);
+    const sliceHeightMm = sliceHeightPx / pxPerMm;
+    if(i > 0) pdf.addPage();
+    pdf.addImage(sliceData, "JPEG", margin, margin, contentWidthMm, sliceHeightMm);
   }
 }
 
@@ -3844,11 +3911,9 @@ async function exportPDF(){
   btn.textContent = "Generando PDF…";
   btn.disabled = true;
   try{
-    const canvas = await html2canvas(el, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
-    const imgData = canvas.toDataURL("image/jpeg", 0.80);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p","mm","a4");
-    addPagedImageWithMargins(pdf, imgData, canvas);
+    await renderElementToPagedPdf(pdf, el);
     const h = current.header;
     const filename = (h.acta ? ("Acta_"+h.acta) : "Acta_FR-AT-260").replace(/[^a-zA-Z0-9_\-]/g,"_") + ".pdf";
     pdf.save(filename);
@@ -3936,11 +4001,9 @@ async function exportPlanPDF(){
   btn.textContent = "Generando PDF…";
   btn.disabled = true;
   try{
-    const canvas = await html2canvas(el, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
-    const imgData = canvas.toDataURL("image/jpeg", 0.80);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p","mm","a4");
-    addPagedImageWithMargins(pdf, imgData, canvas);
+    await renderElementToPagedPdf(pdf, el);
     const h = current.header;
     const filename = "PlanMejora_" + (h.acta ? h.acta : "FR-AT-260").replace(/[^a-zA-Z0-9_\-]/g,"_") + ".pdf";
     pdf.save(filename);
@@ -6040,11 +6103,9 @@ async function exportLimpiezaMonthlyPDF(pointId, year, month){
   `;
   document.body.appendChild(container);
   try{
-    const canvas = await html2canvas(container, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
-    const imgData = canvas.toDataURL("image/jpeg", 0.80);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF("p","mm","a4");
-    addPagedImageWithMargins(pdf, imgData, canvas);
+    await renderElementToPagedPdf(pdf, container);
     const nombre = point.nombre.replace(/[^a-zA-Z0-9]+/g,"_");
     pdf.save(`Limpieza_${nombre}_${year}-${String(month+1).padStart(2,"0")}.pdf`);
   }catch(e){
