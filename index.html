@@ -639,6 +639,7 @@ canvas.sigpad{
       <button class="navtab" data-nav="turnos" onclick="App.showMain('turnos')">📅 Auditoría de Turnos</button>
       <button class="navtab" data-nav="rechazos" onclick="App.showMain('rechazos')">🚫 Dispensaciones No facturables</button>
       <button class="navtab" data-nav="informe" onclick="App.showMain('informe')">📊 Informe de Dispensación</button>
+      <button class="navtab" data-nav="proyeccion" onclick="App.showMain('proyeccion')">📈 Proyección Operativa</button>
     </div>
     <div class="main-content">
 
@@ -758,6 +759,7 @@ canvas.sigpad{
           <button class="subtab" data-psub="turnos" onclick="App.showPuntoSub('turnos')">📅 Auditoría de Turnos</button>
           <button class="subtab" data-psub="rechazos" onclick="App.showPuntoSub('rechazos')">🚫 Dispensaciones No facturables</button>
           <button class="subtab" data-psub="informe" onclick="App.showPuntoSub('informe')">📊 Informe de Dispensación</button>
+          <button class="subtab" data-psub="proyeccion" onclick="App.showPuntoSub('proyeccion')">📈 Proyección Operativa</button>
           <button class="subtab" data-psub="password" onclick="App.showPuntoSub('password')">Mi contraseña</button>
         </div>
         <div class="view" id="puntoDocsContent"></div>
@@ -786,6 +788,13 @@ canvas.sigpad{
             <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: genera el informe diario de dispensación a partir del Detallado de Dispensación (CSV). Publica la información completa de todos los puntos, sin restricción de bodegas.</p>
           </div>
           <iframe id="puntoInformeFrame" data-src="informe.html" title="Informe de Dispensación" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+        </div>
+        <div class="view hidden" id="puntoProyeccionContent">
+          <div class="panel" style="margin-bottom:12px;">
+            <h3 style="margin-top:0;">📈 Proyección Operativa</h3>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Herramienta de planeación: proyección de dotación, activos fijos y costos operativos por municipio. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí; los datos ingresados aquí viven solo en esta sesión del navegador).</p>
+          </div>
+          <iframe id="puntoProyeccionFrame" data-src="proyeccion.html" title="Proyección Operativa" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
         </div>
         <div class="view hidden" id="puntoPasswordContent"></div>
       </div>
@@ -839,6 +848,15 @@ canvas.sigpad{
           <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: genera el informe diario de dispensación a partir del Detallado de Dispensación (CSV). Publica la información completa de todos los puntos, sin restricción de bodegas. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
         </div>
         <iframe id="informeFrame" data-src="informe.html" title="Informe de Dispensación" loading="lazy" style="width:100%;height:calc(100vh - 170px);min-height:600px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+      </div>
+
+      <!-- PROYECCIÓN OPERATIVA (panel autocontenido, sin Supabase; los datos ingresados viven solo en esta sesión del navegador) -->
+      <div class="hidden" id="section-proyeccion">
+        <div class="panel" style="margin-bottom:12px;">
+          <h3 style="margin-top:0;">📈 Proyección Operativa</h3>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Herramienta de planeación: proyección de dotación, activos fijos y costos operativos por municipio. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí; los datos ingresados aquí viven solo en esta sesión del navegador).</p>
+        </div>
+        <iframe id="proyeccionFrame" data-src="proyeccion.html" title="Proyección Operativa" loading="lazy" style="width:100%;height:calc(100vh - 170px);min-height:600px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
       </div>
 
     </div>
@@ -7430,6 +7448,7 @@ const App = {
     document.getElementById("section-turnos").classList.add("hidden");
     document.getElementById("section-rechazos").classList.add("hidden");
     document.getElementById("section-informe").classList.add("hidden");
+    document.getElementById("section-proyeccion").classList.add("hidden");
     document.getElementById("sessionBadge").classList.add("hidden");
     document.getElementById("view-login").classList.remove("hidden");
     document.getElementById("login_role").value = "admin";
@@ -7454,6 +7473,7 @@ const App = {
       document.getElementById("section-turnos").classList.add("hidden");
       document.getElementById("section-rechazos").classList.add("hidden");
       document.getElementById("section-informe").classList.add("hidden");
+      document.getElementById("section-proyeccion").classList.add("hidden");
       document.getElementById("section-punto").classList.remove("hidden");
       this.showPuntoSub("documentos");
     } else {
@@ -7476,6 +7496,7 @@ const App = {
     document.getElementById("section-turnos").classList.toggle("hidden", section!=="turnos");
     document.getElementById("section-rechazos").classList.toggle("hidden", section!=="rechazos");
     document.getElementById("section-informe").classList.toggle("hidden", section!=="informe");
+    document.getElementById("section-proyeccion").classList.toggle("hidden", section!=="proyeccion");
     document.querySelectorAll(".navtab").forEach(b=>b.classList.toggle("active", b.dataset.nav===section));
     if(section==="notificaciones") this.showNotifSub(this.currentNotifSub);
     if(section==="director") this.showDirectorSub(this.currentDirSub);
@@ -7484,6 +7505,7 @@ const App = {
     if(section==="turnos") this.loadTurnosFrame("turnosFrame");
     if(section==="rechazos") this.loadTurnosFrame("rechazosFrame");
     if(section==="informe") this.loadTurnosFrame("informeFrame");
+    if(section==="proyeccion") this.loadTurnosFrame("proyeccionFrame");
   },
   loadTurnosFrame(iframeId){
     const f = document.getElementById(iframeId);
@@ -7575,6 +7597,7 @@ const App = {
     document.getElementById("puntoTurnosContent").classList.toggle("hidden", sub!=="turnos");
     document.getElementById("puntoRechazosContent").classList.toggle("hidden", sub!=="rechazos");
     document.getElementById("puntoInformeContent").classList.toggle("hidden", sub!=="informe");
+    document.getElementById("puntoProyeccionContent").classList.toggle("hidden", sub!=="proyeccion");
     document.getElementById("puntoPasswordContent").classList.toggle("hidden", sub!=="password");
     document.querySelectorAll('[data-psub]').forEach(b=>b.classList.toggle("active", b.dataset.psub===sub));
     if(sub==="documentos") renderPuntoDocs();
@@ -7586,6 +7609,7 @@ const App = {
     if(sub==="turnos") this.loadTurnosFrame("puntoTurnosFrame");
     if(sub==="rechazos") this.loadTurnosFrame("puntoRechazosFrame");
     if(sub==="informe") this.loadTurnosFrame("puntoInformeFrame");
+    if(sub==="proyeccion") this.loadTurnosFrame("puntoProyeccionFrame");
     if(sub==="password") renderMiPassword("puntoPasswordContent");
   },
   show(view){
