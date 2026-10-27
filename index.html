@@ -756,10 +756,6 @@ canvas.sigpad{
           <button class="subtab" data-psub="mantenimiento" onclick="App.showPuntoSub('mantenimiento')">Mantenimiento de equipos</button>
           <button class="subtab" data-psub="activos" onclick="App.showPuntoSub('activos')">Activos fijos</button>
           <button class="subtab" data-psub="auditorias" onclick="App.showPuntoSub('auditorias')">Mis auditorías</button>
-          <button class="subtab" data-psub="turnos" onclick="App.showPuntoSub('turnos')">📅 Auditoría de Turnos</button>
-          <button class="subtab" data-psub="rechazos" onclick="App.showPuntoSub('rechazos')">🚫 Dispensaciones No facturables</button>
-          <button class="subtab" data-psub="informe" onclick="App.showPuntoSub('informe')">📊 Informe de Dispensación</button>
-          <button class="subtab" data-psub="proyeccion" onclick="App.showPuntoSub('proyeccion')">📈 Proyección Operativa</button>
           <button class="subtab" data-psub="password" onclick="App.showPuntoSub('password')">Mi contraseña</button>
         </div>
         <div class="view" id="puntoDocsContent"></div>
@@ -768,34 +764,6 @@ canvas.sigpad{
         <div class="view hidden" id="puntoMantenimientoContent"></div>
         <div class="view hidden" id="puntoActivosContent"></div>
         <div class="view hidden" id="puntoAuditContent"></div>
-        <div class="view hidden" id="puntoTurnosContent">
-          <div class="panel" style="margin-bottom:12px;">
-            <h3 style="margin-top:0;">📅 Auditoría de Turnos</h3>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: balance de turnos digitales por punto de dispensación. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
-          </div>
-          <iframe id="puntoTurnosFrame" data-src="turnos.html" title="Auditoría de Turnos" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
-        </div>
-        <div class="view hidden" id="puntoRechazosContent">
-          <div class="panel" style="margin-bottom:12px;">
-            <h3 style="margin-top:0;">🚫 Dispensaciones No facturables</h3>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: dispensaciones no facturables por punto de dispensación. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí).</p>
-          </div>
-          <iframe id="puntoRechazosFrame" data-src="rechazos.html" title="Dispensaciones No facturables" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
-        </div>
-        <div class="view hidden" id="puntoInformeContent">
-          <div class="panel" style="margin-bottom:12px;">
-            <h3 style="margin-top:0;">📊 Informe de Dispensación</h3>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Panel de solo consulta: genera el informe diario de dispensación a partir del Detallado de Dispensación (CSV). Publica la información completa de todos los puntos, sin restricción de bodegas.</p>
-          </div>
-          <iframe id="puntoInformeFrame" data-src="informe.html" title="Informe de Dispensación" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
-        </div>
-        <div class="view hidden" id="puntoProyeccionContent">
-          <div class="panel" style="margin-bottom:12px;">
-            <h3 style="margin-top:0;">📈 Proyección Operativa</h3>
-            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Herramienta de planeación: proyección de dotación, activos fijos y costos operativos por municipio. Esta información es independiente de la base de datos de la auditoría (no se guarda ni se modifica desde aquí; los datos ingresados aquí viven solo en esta sesión del navegador).</p>
-          </div>
-          <iframe id="puntoProyeccionFrame" data-src="proyeccion.html" title="Proyección Operativa" loading="lazy" style="width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
-        </div>
         <div class="view hidden" id="puntoPasswordContent"></div>
       </div>
 
@@ -7436,6 +7404,7 @@ const App = {
     loadAllDB("full").catch(e=>console.error("Error precargando datos en segundo plano:", e));
   },
   showLogin(){
+    this.resetToolFrames();
     document.querySelector(".brandbar").classList.add("hidden");
     document.getElementById("mainNavBar").classList.add("hidden");
     document.getElementById("view-forcepin").classList.add("hidden");
@@ -7509,13 +7478,18 @@ const App = {
   },
   loadTurnosFrame(iframeId){
     const f = document.getElementById(iframeId);
-    if(!f || f.src || !f.dataset.src) return;
+    if(!f || !f.dataset.src) return;
     let src = f.dataset.src;
-    if(iframeId==="proyeccionFrame" || iframeId==="puntoProyeccionFrame"){
+    if(iframeId==="proyeccionFrame"){
       const rol = (SESSION && SESSION.role==="admin") ? "director" : "otro";
       src += (src.indexOf("?")>=0?"&":"?") + "rol=" + encodeURIComponent(rol);
     }
-    f.src = src;
+    if(f.getAttribute("src")!==src) f.src = src;
+  },
+  resetToolFrames(){
+    ["turnosFrame","rechazosFrame","informeFrame","proyeccionFrame"].forEach(id=>{
+      const f=document.getElementById(id); if(f) f.removeAttribute("src");
+    });
   },
   currentNotifSub: "actividad",
   showNotifSub(sub){
@@ -7600,10 +7574,6 @@ const App = {
     document.getElementById("puntoMantenimientoContent").classList.toggle("hidden", sub!=="mantenimiento");
     document.getElementById("puntoActivosContent").classList.toggle("hidden", sub!=="activos");
     document.getElementById("puntoAuditContent").classList.toggle("hidden", sub!=="auditorias");
-    document.getElementById("puntoTurnosContent").classList.toggle("hidden", sub!=="turnos");
-    document.getElementById("puntoRechazosContent").classList.toggle("hidden", sub!=="rechazos");
-    document.getElementById("puntoInformeContent").classList.toggle("hidden", sub!=="informe");
-    document.getElementById("puntoProyeccionContent").classList.toggle("hidden", sub!=="proyeccion");
     document.getElementById("puntoPasswordContent").classList.toggle("hidden", sub!=="password");
     document.querySelectorAll('[data-psub]').forEach(b=>b.classList.toggle("active", b.dataset.psub===sub));
     if(sub==="documentos") renderPuntoDocs();
@@ -7612,10 +7582,6 @@ const App = {
     if(sub==="mantenimiento") renderPuntoMantenimiento();
     if(sub==="activos") renderPuntoActivos();
     if(sub==="auditorias") renderPuntoAudits();
-    if(sub==="turnos") this.loadTurnosFrame("puntoTurnosFrame");
-    if(sub==="rechazos") this.loadTurnosFrame("puntoRechazosFrame");
-    if(sub==="informe") this.loadTurnosFrame("puntoInformeFrame");
-    if(sub==="proyeccion") this.loadTurnosFrame("puntoProyeccionFrame");
     if(sub==="password") renderMiPassword("puntoPasswordContent");
   },
   show(view){
