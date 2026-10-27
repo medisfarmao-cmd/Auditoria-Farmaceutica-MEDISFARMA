@@ -647,23 +647,66 @@ function calcNomina(r, pts, nom) {
   return {auxRed:auxRed, cAux:cAux, cReg:cReg, cMen:cMen, total:cAux+cReg+cMen};
 }
 
+/* Puntos definidos manualmente por el usuario: clave "municipio|capita|evento" -> número de puntos */
+var ptsOverride = {};
+
+function grupoCalc(auxG, n, r, c, usrP, cfg) {
+  var auxPerAudit = c.auxPorAudit || 8;
+  var auxAudit = Math.floor(auxG / auxPerAudit);
+  var auxTotal = auxG + auxAudit;
+  var colEnPunto = auxTotal + 1;
+  var m2Calc = colEnPunto * c.m2, m2Note = '', m2;
+  if (r.regSolo && auxG === 0) { m2 = Math.max(35, m2Calc); if (m2Calc < 35) m2Note = '35m²'; }
+  else if (auxG === 1 && auxAudit === 0) { m2 = Math.max(50, m2Calc); if (m2Calc < 50) m2Note = '50m²'; }
+  else { m2 = m2Calc; }
+  var sillas = Math.max(4, Math.ceil(usrP * 0.12 / 4) * 4);
+  var act = calcActivos({colEnPunto:colEnPunto, usrPunto:usrP, m2:m2}, 0, cfg.act);
+  var tas = act.total + sillas * cfg.act.sesp;
+  return {n:n, aux:auxG, ventanillas:auxG, auxAudit:auxAudit, auxTotal:auxTotal,
+          colEnPunto:colEnPunto, m2:m2, m2Note:m2Note, sillas:sillas,
+          activos:act.items, pcPt:act.pc, totalAct:tas, invTotal:tas * n};
+}
+
 function calcMunicipio(nombre, pob, tipo, cfg) {
   var res={nombre:nombre,pob:pob,tipo:tipo};
-  function build(c) {
+  function build(c, tkey) {
     var r=calcContrato(pob,c,cfg.horario);
-    var pp=Math.ceil(pob/r.pts);  /* poblacion TOTAL por punto */
-    var act=calcActivos(r,pp,cfg.act);
-    var tas=act.total+r.sillas*cfg.act.sesp;
-    var nom=calcNomina(r,r.pts,cfg.nom);
-    return Object.assign({},r,{activos:act.items,pcPt:act.pc,totalAct:tas,invTotal:tas*r.pts,nom:nom});
+    var key=nombre+'|'+tkey;
+    var N=parseInt(ptsOverride[key])||r.pts;
+    if (N<1) N=r.pts;
+    var T=r.aux*r.pts;                       /* ventanillas totales requeridas */
+    var defs=[];
+    if (N===r.pts) defs.push({n:N,aux:r.aux});
+    else {
+      var base=Math.floor(T/N), rem=T%N;
+      if (rem>0) defs.push({n:rem,aux:base+1});
+      defs.push({n:N-rem,aux:base});
+    }
+    var usrP=r.usrDiaTot/N, formP=usrP*r.fpu;
+    var grupos=[], auxRed=0, invTotal=0;
+    for (var i=0;i<defs.length;i++) {
+      var g=grupoCalc(defs[i].aux,defs[i].n,r,c,usrP,cfg);
+      grupos.push(g); auxRed+=g.auxTotal*g.n; invTotal+=g.invTotal;
+    }
+    var cAux=auxRed*cfg.nom.aux, cReg=N*cfg.nom.reg, cMen=r.mens*cfg.nom.men;
+    var nom={auxRed:auxRed,cAux:cAux,cReg:cReg,cMen:cMen,total:cAux+cReg+cMen};
+    var g0=grupos[0];
+    return Object.assign({},r,{
+      pts:N, ptsSugerido:r.pts, key:key, usrPunto:usrP, formPunto:formP,
+      aux:g0.aux, ventanillas:g0.ventanillas, auxAudit:g0.auxAudit, auxTotal:g0.auxTotal,
+      colEnPunto:g0.colEnPunto, m2:g0.m2, m2Note:g0.m2Note, sillas:g0.sillas,
+      activos:g0.activos, pcPt:g0.pcPt, totalAct:g0.totalAct,
+      ventanillasTot:T, grupos:grupos, invTotal:invTotal, nom:nom,
+      totalCol:auxRed+N+r.mens
+    });
   }
-  if (tipo==='capita'||tipo==='ambos') res.capita=build(cfg.capita);
-  if (tipo==='evento'||tipo==='ambos') res.evento=build(cfg.evento);
+  if (tipo==='capita'||tipo==='ambos') res.capita=build(cfg.capita,'capita');
+  if (tipo==='evento'||tipo==='ambos') res.evento=build(cfg.evento,'evento');
   return res;
 }
 
 /* ── CALCULATE ALL ── */
-function calcularTodo() {
+function computeAll() {
   var cfg=getConfig(), resultados=[];
   for (var i=0;i<munis.length;i++) {
     var id=munis[i].id;
@@ -672,13 +715,41 @@ function calcularTodo() {
     var nombre=nomEl?nomEl.value.trim():munis[i].nombre;
     var pobVal=pobEl?parseInt(pobEl.value):parseInt(munis[i].pob);
     var tipoVal=tipoEl?tipoEl.value:munis[i].tipo;
-    if (!nombre||!pobVal||pobVal<100){ alert('Completa todos los campos (m\u00edn 100 hab.).'); return; }
+    if (!nombre||!pobVal||pobVal<100){ alert('Completa todos los campos (mín 100 hab.).'); return null; }
     resultados.push(calcMunicipio(nombre,pobVal,tipoVal,cfg));
   }
-  if (!resultados.length){ alert('Agrega al menos un municipio.'); return; }
+  if (!resultados.length){ alert('Agrega al menos un municipio.'); return null; }
+  return resultados;
+}
+
+function calcularTodo() {
+  ptsOverride={};   /* un cálculo nuevo vuelve a la cantidad de puntos sugerida */
+  var resultados=computeAll();
+  if (!resultados) return;
   lastResultados=resultados;
   renderResults(resultados);
   showView('results');
+}
+
+/* El usuario cambia el número de puntos: se redistribuyen ventanillas, personal, activos y nómina */
+function setPuntos(inp) {
+  var key=inp.getAttribute('data-key'), v=parseInt(inp.value);
+  if (!v||v<1) delete ptsOverride[key]; else ptsOverride[key]=v;
+  var y=window.pageYOffset||0;
+  var resultados=computeAll();
+  if (!resultados) return;
+  lastResultados=resultados;
+  renderResults(resultados);
+  window.scrollTo(0,y);
+}
+
+function distTxt(d) {
+  var parts=[];
+  for (var i=0;i<d.grupos.length;i++) {
+    var g=d.grupos[i];
+    parts.push(g.n+(g.n===1?' punto':' puntos')+' de '+g.ventanillas+(g.ventanillas===1?' ventanilla':' ventanillas'));
+  }
+  return parts.join(' y ');
 }
 
 /* ── FORMAT ── */
@@ -721,26 +792,28 @@ function renderContrato(d, isCapita) {
     warnHtml+='<div class="nb-txt">Carga por punto (<strong>'+dec(d.usrPunto)+' usuarios/d\u00eda</strong>) cerca del l\u00edmite del 30%. Considera abrir un punto adicional.</div></div>';
   }
 
-  /* Activos */
-  var actRows='';
-  for (var i=0;i<d.activos.length;i++) {
-    var it=d.activos[i];
-    actRows+=IS_DIRECTOR
-      ?'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>'
-      :'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td></tr>';
-  }
+  var multi=d.grupos.length>1;
   var sesp=iv('a_sesp',80000);
-  actRows+=IS_DIRECTOR
-    ?'<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>'
-    :'<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td></tr>';
 
-  var auditRow='';
-  if (d.auxAudit>0) {
-    auditRow='<tr><td>Aux. farmacia (auditor\u00eda)</td><td class="num">'+d.auxAudit+'</td><td class="num">'+(d.auxAudit*d.pts)+'</td></tr>';
+  function actRowsFor(g) {
+    var rows='';
+    for (var i=0;i<g.activos.length;i++) {
+      var it=g.activos[i];
+      rows+=IS_DIRECTOR
+        ?'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>'
+        :'<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td></tr>';
+    }
+    rows+=IS_DIRECTOR
+      ?'<tr><td>Silla de espera</td><td class="num">'+g.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(g.sillas*sesp)+'</td></tr>'
+      :'<tr><td>Silla de espera</td><td class="num">'+g.sillas+'</td></tr>';
+    return rows;
   }
+
   var mensRow=d.mens>0
     ?'<tr><td>Mensajero</td><td class="num">&mdash;</td><td class="num">'+d.mens+'</td></tr>'
     :'<tr><td>Mensajero</td><td class="num">&mdash;</td><td class="num" style="color:var(--muted)">No aplica</td></tr>';
+
+  var porPto=multi?d.grupos.map(function(g){return g.ventanillas;}).join(' / '):num(d.ventanillas);
 
   var h='';
   h+='<div class="result-section">';
@@ -754,55 +827,85 @@ function renderContrato(d, isCapita) {
   h+='<div class="mb-txt">'+mTxt+'</div></div>';
 
   h+='<div class="kpi-grid">';
-  h+='<div class="kpi '+(isCapita?'blue':'green')+'"><div class="kpi-val">'+num(d.pts)+'</div><div class="kpi-lbl">Puntos</div></div>';
+  h+='<div class="kpi '+(isCapita?'blue':'green')+'"><div class="kpi-val"><input type="number" min="1" value="'+d.pts+'" data-key="'+escHtml(d.key)+'" onchange="setPuntos(this)" style="width:80px;text-align:center;font-size:inherit;font-weight:inherit;font-family:inherit;border:1.5px solid var(--border,#cfd8e6);border-radius:8px;padding:2px 4px;background:#fff;color:inherit;"></div><div class="kpi-lbl">Puntos (editable)</div></div>';
   h+='<div class="kpi '+(isCapita?'blue':'green')+'"><div class="kpi-val">'+num(d.totalCol)+'</div><div class="kpi-lbl">Colaboradores</div></div>';
-  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.usrDiaTot))+'</div><div class="kpi-lbl">Usuarios totales/d\u00eda</div></div>';
-  h+='<div class="kpi"><div class="kpi-val">'+dec(d.usrPunto)+'</div><div class="kpi-lbl">Usuarios/d\u00eda/pto</div></div>';
-  h+='<div class="kpi"><div class="kpi-val">'+dec(d.formPunto)+'</div><div class="kpi-lbl">F\u00f3rmulas/d\u00eda/pto</div></div>';
-  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.formDiaTot))+'</div><div class="kpi-lbl">F\u00f3rmulas totales/d\u00eda</div></div>';
-  h+='<div class="kpi"><div class="kpi-val">'+num(d.ventanillas)+'</div><div class="kpi-lbl">Ventanillas atenci\u00f3n/pto</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.usrDiaTot))+'</div><div class="kpi-lbl">Usuarios totales/día</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+dec(d.usrPunto)+'</div><div class="kpi-lbl">Usuarios/día/pto</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+dec(d.formPunto)+'</div><div class="kpi-lbl">Fórmulas/día/pto</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(Math.round(d.formDiaTot))+'</div><div class="kpi-lbl">Fórmulas totales/día</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+num(d.ventanillasTot)+'</div><div class="kpi-lbl">Ventanillas totales (red)</div></div>';
+  h+='<div class="kpi"><div class="kpi-val">'+porPto+'</div><div class="kpi-lbl">Ventanillas por punto</div></div>';
   h+='</div>';
 
-  h+='<div class="section-label">Atenci\u00f3n diaria</div>';
-  h+='<table class="mini-table" style="margin-bottom:8px"><thead><tr><th>Indicador</th><th class="num">Valor</th></tr></thead><tbody>';
-  h+='<tr><td>Usuarios / d\u00eda (por punto)</td><td class="num">'+dec(d.usrPunto)+'</td></tr>';
-  h+='<tr><td>Usuarios totales / d\u00eda (red)</td><td class="num">'+num(Math.round(d.usrDiaTot))+'</td></tr>';
-  h+='<tr><td>F\u00f3rmulas totales / d\u00eda (por punto)</td><td class="num">'+dec(d.formPunto)+'</td></tr>';
-  h+='<tr><td>F\u00f3rmulas totales / d\u00eda (red)</td><td class="num">'+num(Math.round(d.formDiaTot))+'</td></tr>';
-  h+='<tr><td>Capacidad operativa / d\u00eda</td><td class="num">'+num(d.capTotal)+'</td></tr>';
-  h+='<tr><td>Metraje por punto</td><td class="num">'+num(d.m2)+' m\u00b2</td></tr>';
-  h+='<tr><td>Sillas de espera</td><td class="num">'+num(d.sillas)+'</td></tr>';
-  h+='</tbody></table>'+m2Html;
-
-  h+='<div class="section-label">Personal</div>';
-  h+='<table class="mini-table" style="margin-bottom:4px"><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">Total red</th></tr></thead><tbody>';
-  h+='<tr><td>Ventanillas de atenci\u00f3n (aux. dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
-  h+=auditRow;
-  h+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+d.pts+'</td></tr>';
-  h+=mensRow;
-  h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total</strong></td><td class="num"><strong>'+num(d.totalCol)+'</strong></td></tr></tfoot></table>';
-  if (d.auxAudit>0) h+='<p style="font-size:11px;color:var(--muted);padding:3px 6px">* 1 aux. auditor\u00eda por cada 8 aux. base</p>';
-
-  h+='<div class="section-label">Activos por punto &nbsp;<span style="font-size:10px;font-weight:600">PC: '+d.pcPt+' ('+d.auxTotal+' aux + 1 reg)</span></div>';
-  h+='<div style="overflow-x:auto"><table class="mini-table">';
-  if (IS_DIRECTOR) {
-    h+='<thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead>';
-    h+='<tbody>'+actRows+'</tbody><tfoot>';
-    h+='<tr class="'+tc+'"><td colspan="3"><strong>Total / punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
-    h+='<tr class="tr-sub"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
-    h+='</tfoot></table></div>';
-  } else {
-    h+='<thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead>';
-    h+='<tbody>'+actRows+'</tbody></table></div>';
+  if (d.pts!==d.ptsSugerido) {
+    h+='<div class="note-box note-amber"><span class="nb-icon">&#x270F;&#xFE0F;</span><div class="nb-txt">Puntos modificados manualmente (el cálculo sugiere <strong>'+d.ptsSugerido+'</strong>). Para volver al sugerido, vacía la casilla de puntos.</div></div>';
+  }
+  if (multi) {
+    h+='<div class="note-box note-blue"><span class="nb-icon">&#x1F4CD;</span><div class="nb-txt">Distribución: <strong>'+distTxt(d)+'</strong>.</div></div>';
   }
 
-  h+='<div class="section-label">N\u00f3mina mensual</div>';
+  h+='<div class="section-label">Atención diaria</div>';
+  h+='<table class="mini-table" style="margin-bottom:8px"><thead><tr><th>Indicador</th><th class="num">Valor</th></tr></thead><tbody>';
+  h+='<tr><td>Usuarios / día (por punto)</td><td class="num">'+dec(d.usrPunto)+'</td></tr>';
+  h+='<tr><td>Usuarios totales / día (red)</td><td class="num">'+num(Math.round(d.usrDiaTot))+'</td></tr>';
+  h+='<tr><td>Fórmulas totales / día (por punto)</td><td class="num">'+dec(d.formPunto)+'</td></tr>';
+  h+='<tr><td>Fórmulas totales / día (red)</td><td class="num">'+num(Math.round(d.formDiaTot))+'</td></tr>';
+  h+='<tr><td>Capacidad operativa / día</td><td class="num">'+num(d.capTotal)+'</td></tr>';
+  h+='</tbody></table>';
+
+  for (var gi=0;gi<d.grupos.length;gi++) {
+    var g=d.grupos[gi];
+    if (multi) h+='<div class="section-label" style="font-size:12px">&#x1F4CD; '+g.n+(g.n===1?' punto':' puntos')+' de '+g.ventanillas+(g.ventanillas===1?' ventanilla':' ventanillas')+'</div>';
+
+    var gm2='';
+    if (g.m2Note) {
+      gm2='<div class="note-box note-blue"><span class="nb-icon">&#x1F4CB;</span><div class="nb-txt">Área ajustada a <strong>'+g.m2Note+'</strong> por norma colombiana vigente'+(g.m2Note==='50m²'?' (punto con 1 regente + 1 auxiliar)':' (punto de solo regente)')+'.</div></div>';
+    }
+    h+='<table class="mini-table" style="margin-bottom:8px"><thead><tr><th>Indicador</th><th class="num">Valor</th></tr></thead><tbody>';
+    h+='<tr><td>Metraje por punto</td><td class="num">'+num(g.m2)+' m²</td></tr>';
+    h+='<tr><td>Sillas de espera</td><td class="num">'+num(g.sillas)+'</td></tr>';
+    h+='</tbody></table>'+gm2;
+
+    h+='<div class="section-label">Personal'+(multi?' (por punto del grupo)':'')+'</div>';
+    h+='<table class="mini-table" style="margin-bottom:4px"><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">'+(multi?'Total grupo':'Total red')+'</th></tr></thead><tbody>';
+    h+='<tr><td>Ventanillas de atención</td><td class="num">'+g.ventanillas+'</td><td class="num">'+(g.ventanillas*g.n)+'</td></tr>';
+    if (g.auxAudit>0) h+='<tr><td>Aux. farmacia (auditoría)</td><td class="num">'+g.auxAudit+'</td><td class="num">'+(g.auxAudit*g.n)+'</td></tr>';
+    h+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+g.n+'</td></tr>';
+    if (!multi) h+=mensRow;
+    var totG=multi?(g.auxTotal*g.n+g.n):d.totalCol;
+    h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total</strong></td><td class="num"><strong>'+num(totG)+'</strong></td></tr></tfoot></table>';
+    if (g.auxAudit>0) h+='<p style="font-size:11px;color:var(--muted);padding:3px 6px">* 1 aux. auditoría por cada 8 aux. base</p>';
+
+    h+='<div class="section-label">Activos por punto &nbsp;<span style="font-size:10px;font-weight:600">PC: '+g.pcPt+' ('+g.auxTotal+' aux + 1 reg)</span></div>';
+    h+='<div style="overflow-x:auto"><table class="mini-table">';
+    if (IS_DIRECTOR) {
+      h+='<thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead>';
+      h+='<tbody>'+actRowsFor(g)+'</tbody><tfoot>';
+      h+='<tr class="'+tc+'"><td colspan="3"><strong>Total / punto</strong></td><td class="num">'+cop(g.totalAct)+'</td></tr>';
+      h+='<tr class="tr-sub"><td colspan="3"><strong>Inversión total ('+g.n+' pts)</strong></td><td class="num">'+cop(g.invTotal)+'</td></tr>';
+      h+='</tfoot></table></div>';
+    } else {
+      h+='<thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead>';
+      h+='<tbody>'+actRowsFor(g)+'</tbody></table></div>';
+    }
+  }
+
+  if (multi) {
+    h+='<div class="section-label">Total red</div>';
+    h+='<table class="mini-table"><tbody>';
+    h+=mensRow.replace('<td class="num">&mdash;</td>','');
+    h+='</tbody><tfoot><tr class="'+tc+'"><td>Total colaboradores (red)</td><td class="num"><strong>'+num(d.totalCol)+'</strong></td></tr>';
+    if (IS_DIRECTOR) h+='<tr class="tr-sub"><td>Inversión total en activos (red)</td><td class="num">'+cop(d.invTotal)+'</td></tr>';
+    h+='</tfoot></table>';
+  }
+
+  h+='<div class="section-label">Nómina mensual</div>';
   if (IS_DIRECTOR) {
     h+='<table class="mini-table"><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
     h+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
     h+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
     h+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
-    h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+    h+='</tbody><tfoot><tr class="'+tc+'"><td colspan="2"><strong>Total nómina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
   } else {
     h+='<table class="mini-table"><thead><tr><th>Cargo</th><th class="num">Cant.</th></tr></thead><tbody>';
     h+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td></tr>';
@@ -843,32 +946,42 @@ function buildConsolidado() {
   for (var i=0;i<lastResultados.length;i++) {
     var r=lastResultados[i];
     var cts=[];
-    if (r.capita) cts.push({d:r.capita,lbl:'C\u00e1pita'});
+    if (r.capita) cts.push({d:r.capita,lbl:'Cápita'});
     if (r.evento) cts.push({d:r.evento,lbl:'Evento'});
     for (var j=0;j<cts.length;j++) {
       var d=cts[j].d;
-      var row={
-        'Municipio':r.nombre,'Contrato':cts[j].lbl,
-        'Poblaci\u00f3n':r.pob,'Pob. objetivo':d.pobObj,
-        'Puntos':d.pts,'Usuarios totales/d\u00eda':Math.round(d.usrDiaTot),
-        'Usuarios/d\u00eda/pto':parseFloat(dec(d.usrPunto)),
-        'F\u00f3rmulas/d\u00eda/pto':parseFloat(dec(d.formPunto)),
-        'F\u00f3rmulas totales/d\u00eda':Math.round(d.formDiaTot),
-        'Ventanillas atenci\u00f3n/pto':d.ventanillas,
-        'Aux.dispensaci\u00f3n/pto':d.aux,'Aux.auditor\u00eda/pto':d.auxAudit,
-        'Aux.total/pto':d.auxTotal,'Regentes red':d.pts,'Mensajeros':d.mens,
-        'Total colaboradores':d.totalCol,'Metraje m\u00b2':d.m2,
-        'Sillas espera/pto':d.sillas,'PC/pto':d.pcPt
-      };
-      if (IS_DIRECTOR) {
-        row['Activos/pto $']=Math.round(d.totalAct);
-        row['Inversi\u00f3n total $']=Math.round(d.invTotal);
-        row['N\u00f3mina total $']=Math.round(d.nom.total);
-        row['N\u00f3mina aux $']=Math.round(d.nom.cAux);
-        row['N\u00f3mina reg $']=Math.round(d.nom.cReg);
-        row['N\u00f3mina mens $']=Math.round(d.nom.cMen);
+      for (var gi=0;gi<d.grupos.length;gi++) {
+        var g=d.grupos[gi], first=(gi===0);
+        var row={
+          'Municipio':r.nombre,'Contrato':cts[j].lbl,
+          'Población':r.pob,'Pob. objetivo':d.pobObj,
+          'Puntos (red)':d.pts,
+          'Grupo':g.n+(g.n===1?' punto':' puntos')+' de '+g.ventanillas+(g.ventanillas===1?' ventanilla':' ventanillas'),
+          'Puntos del grupo':g.n,
+          'Usuarios totales/día':first?Math.round(d.usrDiaTot):'',
+          'Usuarios/día/pto':parseFloat(dec(d.usrPunto)),
+          'Fórmulas/día/pto':parseFloat(dec(d.formPunto)),
+          'Fórmulas totales/día':first?Math.round(d.formDiaTot):'',
+          'Ventanillas totales (red)':first?d.ventanillasTot:'',
+          'Ventanillas por punto':g.ventanillas,
+          'Aux.dispensación/pto':g.aux,'Aux.auditoría/pto':g.auxAudit,
+          'Aux.total/pto':g.auxTotal,'Regentes del grupo':g.n,
+          'Mensajeros (red)':first?d.mens:'',
+          'Total colaboradores (red)':first?d.totalCol:'',
+          'Metraje m²':g.m2,
+          'Sillas espera/pto':g.sillas,'PC/pto':g.pcPt
+        };
+        if (IS_DIRECTOR) {
+          row['Activos/pto $']=Math.round(g.totalAct);
+          row['Inversión grupo $']=Math.round(g.invTotal);
+          row['Inversión total red $']=first?Math.round(d.invTotal):'';
+          row['Nómina total red $']=first?Math.round(d.nom.total):'';
+          row['Nómina aux red $']=first?Math.round(d.nom.cAux):'';
+          row['Nómina reg red $']=first?Math.round(d.nom.cReg):'';
+          row['Nómina mens red $']=first?Math.round(d.nom.cMen):'';
+        }
+        rows.push(row);
       }
-      rows.push(row);
     }
   }
   return rows;
@@ -879,34 +992,28 @@ function buildActivosDetalle() {
   for (var i=0;i<lastResultados.length;i++) {
     var r=lastResultados[i];
     var cts=[];
-    if (r.capita) cts.push({d:r.capita,lbl:'C\u00e1pita'});
+    if (r.capita) cts.push({d:r.capita,lbl:'Cápita'});
     if (r.evento) cts.push({d:r.evento,lbl:'Evento'});
     for (var j=0;j<cts.length;j++) {
       var d=cts[j].d;
-      for (var k=0;k<d.activos.length;k++) {
-        var it=d.activos[k];
-        var actRow={
-          'Municipio':r.nombre,'Contrato':cts[j].lbl,
-          'Activo':it[0],'Cantidad por punto':it[1],'N\u00fa puntos':d.pts
-        };
-        if (IS_DIRECTOR) {
-          actRow['Valor unitario']=it[2];
-          actRow['Subtotal por punto']=it[1]*it[2];
-          actRow['Total red']=it[1]*it[2]*d.pts;
-        }
-        rows.push(actRow);
-      }
       var sesp=iv('a_sesp',80000);
-      var sespRow={
-        'Municipio':r.nombre,'Contrato':cts[j].lbl,
-        'Activo':'Silla de espera','Cantidad por punto':d.sillas,'N\u00fa puntos':d.pts
-      };
-      if (IS_DIRECTOR) {
-        sespRow['Valor unitario']=sesp;
-        sespRow['Subtotal por punto']=d.sillas*sesp;
-        sespRow['Total red']=d.sillas*sesp*d.pts;
+      for (var gi=0;gi<d.grupos.length;gi++) {
+        var g=d.grupos[gi];
+        var items=g.activos.concat([['Silla de espera',g.sillas,sesp]]);
+        for (var k=0;k<items.length;k++) {
+          var it=items[k];
+          var actRow={
+            'Municipio':r.nombre,'Contrato':cts[j].lbl,
+            'Activo':it[0],'Cantidad por punto':it[1],'Nú puntos':g.n
+          };
+          if (IS_DIRECTOR) {
+            actRow['Valor unitario']=it[2];
+            actRow['Subtotal por punto']=it[1]*it[2];
+            actRow['Total red']=it[1]*it[2]*g.n;
+          }
+          rows.push(actRow);
+        }
       }
-      rows.push(sespRow);
     }
   }
   return rows;
@@ -923,7 +1030,8 @@ function exportarExcel() {
 
     /* Hoja 1: Consolidado ejecutivo */
     var ws1=XLSX.utils.json_to_sheet(rows1);
-    ws1['!cols']=[{wch:18},{wch:10},{wch:12},{wch:12},{wch:8},{wch:12},{wch:12},
+    ws1['!cols']=[{wch:18},{wch:10},{wch:12},{wch:12},{wch:8},{wch:28},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:8},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+    var _unused=[{wch:18},{wch:10},{wch:12},{wch:12},{wch:8},{wch:12},{wch:12},
                   {wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:12},
                   {wch:10},{wch:10},{wch:8},{wch:14},{wch:16},{wch:14},{wch:14},{wch:14},{wch:14}];
     XLSX.utils.book_append_sheet(wb, ws1, 'Consolidado');
@@ -933,7 +1041,7 @@ function exportarExcel() {
     for (var i=0;i<rows2.length;i++) {
       var key=rows2[i]['Activo'];
       if (!pivotMap[key]) pivotMap[key]={cant:0,subtotal:0,totalRed:0};
-      pivotMap[key].cant    += Number(rows2[i]['Cantidad por punto']) || 0;
+      pivotMap[key].cant    += (Number(rows2[i]['Cantidad por punto']) || 0) * (Number(rows2[i]['N\u00fa puntos']) || 1);
       pivotMap[key].subtotal+= Number(rows2[i]['Subtotal por punto']) || 0;
       pivotMap[key].totalRed+= Number(rows2[i]['Total red']) || 0;
     }
@@ -1038,55 +1146,72 @@ function exportarPDF() {
       body+='<div class="contrato-block">';
       body+='<div class="ct-label'+(isC?'':' ev')+'">'+(isC?'Contrato C\u00e1pita':'Contrato Evento')+'</div>';
 
+      var multi=d.grupos.length>1;
+      var porPto=multi?d.grupos.map(function(g){return g.ventanillas;}).join(' / '):String(d.ventanillas);
       body+='<div class="kpi-row">';
       body+='<div class="kpi-box"><div class="kv'+(isC?'':' g')+'">'+num(d.pts)+'</div><div class="kl">Puntos</div></div>';
       body+='<div class="kpi-box"><div class="kv'+(isC?'':' g')+'">'+num(d.totalCol)+'</div><div class="kl">Colaboradores</div></div>';
-      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.usrDiaTot))+'</div><div class="kl">Usr. totales/d\u00eda</div></div>';
-      body+='<div class="kpi-box"><div class="kv">'+dec(d.usrPunto)+'</div><div class="kl">Usr/d\u00eda/pto</div></div>';
-      body+='<div class="kpi-box"><div class="kv">'+dec(d.formPunto)+'</div><div class="kl">Form/d\u00eda/pto</div></div>';
-      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.formDiaTot))+'</div><div class="kl">Form. totales/d\u00eda</div></div>';
-      body+='<div class="kpi-box"><div class="kv">'+d.m2+' m\u00b2</div><div class="kl">Metraje</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.usrDiaTot))+'</div><div class="kl">Usr. totales/día</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+dec(d.usrPunto)+'</div><div class="kl">Usr/día/pto</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+dec(d.formPunto)+'</div><div class="kl">Form/día/pto</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+num(Math.round(d.formDiaTot))+'</div><div class="kl">Form. totales/día</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+num(d.ventanillasTot)+'</div><div class="kl">Ventanillas totales</div></div>';
+      body+='<div class="kpi-box"><div class="kv">'+porPto+'</div><div class="kl">Ventanillas/pto</div></div>';
       body+='</div>';
+      if (multi) body+='<div class="note">&#x1F4CD; Distribución: <strong>'+distTxt(d)+'</strong>.</div>';
 
-      if (d.m2Note) body+='<div class="note">&#x1F4CB; \u00c1rea ajustada a <strong>'+d.m2Note+'</strong> por normativa colombiana.</div>';
+      for (var gi=0;gi<d.grupos.length;gi++) {
+        var g=d.grupos[gi];
+        if (multi) body+='<div class="sec-title">'+g.n+(g.n===1?' punto':' puntos')+' de '+g.ventanillas+(g.ventanillas===1?' ventanilla':' ventanillas')+'</div>';
+        body+='<div class="sub" style="margin-bottom:4px">Metraje por punto: <strong>'+g.m2+' m²</strong> &middot; Sillas de espera: <strong>'+g.sillas+'</strong></div>';
+        if (g.m2Note) body+='<div class="note">&#x1F4CB; Área ajustada a <strong>'+g.m2Note+'</strong> por normativa colombiana.</div>';
 
-      body+='<div class="sec-title">Personal</div>';
-      body+='<table><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">Total red</th></tr></thead><tbody>';
-      body+='<tr><td>Ventanillas de atenci\u00f3n (aux. dispensaci\u00f3n)</td><td class="num">'+d.aux+'</td><td class="num">'+(d.aux*d.pts)+'</td></tr>';
-      if (d.auxAudit>0) body+='<tr><td>Aux. farmacia (auditor\u00eda)</td><td class="num">'+d.auxAudit+'</td><td class="num">'+(d.auxAudit*d.pts)+'</td></tr>';
-      body+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+d.pts+'</td></tr>';
-      body+='<tr><td>Mensajero</td><td class="num">&mdash;</td><td class="num">'+(d.mens>0?d.mens:'No aplica')+'</td></tr>';
-      body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total</strong></td><td class="num"><strong>'+num(d.totalCol)+'</strong></td></tr></tfoot></table>';
+        body+='<div class="sec-title">Personal</div>';
+        body+='<table><thead><tr><th>Cargo</th><th class="num">Por pto.</th><th class="num">'+(multi?'Total grupo':'Total red')+'</th></tr></thead><tbody>';
+        body+='<tr><td>Ventanillas de atención</td><td class="num">'+g.ventanillas+'</td><td class="num">'+(g.ventanillas*g.n)+'</td></tr>';
+        if (g.auxAudit>0) body+='<tr><td>Aux. farmacia (auditoría)</td><td class="num">'+g.auxAudit+'</td><td class="num">'+(g.auxAudit*g.n)+'</td></tr>';
+        body+='<tr><td>Regente de farmacia</td><td class="num">1</td><td class="num">'+g.n+'</td></tr>';
+        if (!multi) body+='<tr><td>Mensajero</td><td class="num">&mdash;</td><td class="num">'+(d.mens>0?d.mens:'No aplica')+'</td></tr>';
+        body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total</strong></td><td class="num"><strong>'+num(multi?(g.auxTotal*g.n+g.n):d.totalCol)+'</strong></td></tr></tfoot></table>';
 
-      body+='<div class="sec-title">Activos fijos por punto</div>';
-      if (IS_DIRECTOR) {
-        body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead><tbody>';
-        for (var k=0;k<d.activos.length;k++) {
-          var it=d.activos[k];
-          body+='<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>';
+        body+='<div class="sec-title">Activos fijos por punto</div>';
+        if (IS_DIRECTOR) {
+          body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th><th class="num">V.Unit.</th><th class="num">Subtotal</th></tr></thead><tbody>';
+          for (var k=0;k<g.activos.length;k++) {
+            var it=g.activos[k];
+            body+='<tr><td>'+it[0]+'</td><td class="num">'+it[1]+'</td><td class="num">'+cop(it[2])+'</td><td class="num">'+cop(it[1]*it[2])+'</td></tr>';
+          }
+          body+='<tr><td>Silla de espera</td><td class="num">'+g.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(g.sillas*sesp)+'</td></tr>';
+          body+='</tbody><tfoot>';
+          body+='<tr class="total-row'+(isC?'':' g')+'"><td colspan="3"><strong>Total por punto</strong></td><td class="num">'+cop(g.totalAct)+'</td></tr>';
+          body+='<tr class="inv-row"><td colspan="3"><strong>Inversión ('+g.n+' pts)</strong></td><td class="num">'+cop(g.invTotal)+'</td></tr>';
+          body+='</tfoot></table>';
+        } else {
+          body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead><tbody>';
+          for (var k2=0;k2<g.activos.length;k2++) {
+            var it2=g.activos[k2];
+            body+='<tr><td>'+it2[0]+'</td><td class="num">'+it2[1]+'</td></tr>';
+          }
+          body+='<tr><td>Silla de espera</td><td class="num">'+g.sillas+'</td></tr>';
+          body+='</tbody></table>';
         }
-        body+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td><td class="num">'+cop(sesp)+'</td><td class="num">'+cop(d.sillas*sesp)+'</td></tr>';
-        body+='</tbody><tfoot>';
-        body+='<tr class="total-row'+(isC?'':' g')+'"><td colspan="3"><strong>Total por punto</strong></td><td class="num">'+cop(d.totalAct)+'</td></tr>';
-        body+='<tr class="inv-row"><td colspan="3"><strong>Inversi\u00f3n total ('+d.pts+' pts)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
-        body+='</tfoot></table>';
-      } else {
-        body+='<table><thead><tr><th>Activo</th><th class="num">Cant.</th></tr></thead><tbody>';
-        for (var k2=0;k2<d.activos.length;k2++) {
-          var it2=d.activos[k2];
-          body+='<tr><td>'+it2[0]+'</td><td class="num">'+it2[1]+'</td></tr>';
-        }
-        body+='<tr><td>Silla de espera</td><td class="num">'+d.sillas+'</td></tr>';
-        body+='</tbody></table>';
       }
 
-      body+='<div class="sec-title">N\u00f3mina mensual</div>';
+      if (multi) {
+        body+='<div class="sec-title">Total red</div>';
+        body+='<table><tbody><tr><td>Mensajeros</td><td class="num">'+(d.mens>0?d.mens:'No aplica')+'</td></tr></tbody>';
+        body+='<tfoot><tr class="total-row'+(isC?'':' g')+'"><td><strong>Total colaboradores (red)</strong></td><td class="num"><strong>'+num(d.totalCol)+'</strong></td></tr>';
+        if (IS_DIRECTOR) body+='<tr class="inv-row"><td><strong>Inversión total en activos (red)</strong></td><td class="num">'+cop(d.invTotal)+'</td></tr>';
+        body+='</tfoot></table>';
+      }
+
+      body+='<div class="sec-title">Nómina mensual</div>';
       if (IS_DIRECTOR) {
         body+='<table><thead><tr><th>Cargo</th><th class="num">Cant.</th><th class="num">Costo/mes</th></tr></thead><tbody>';
         body+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td><td class="num">'+cop(d.nom.cAux)+'</td></tr>';
         body+='<tr><td>Regentes de farmacia</td><td class="num">'+d.pts+'</td><td class="num">'+cop(d.nom.cReg)+'</td></tr>';
         body+='<tr><td>Mensajeros</td><td class="num">'+d.mens+'</td><td class="num">'+cop(d.nom.cMen)+'</td></tr>';
-        body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total n\u00f3mina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
+        body+='</tbody><tfoot><tr class="total-row'+(isC?'':' g')+'"><td colspan="2"><strong>Total nómina</strong></td><td class="num">'+cop(d.nom.total)+'</td></tr></tfoot></table>';
       } else {
         body+='<table><thead><tr><th>Cargo</th><th class="num">Cant.</th></tr></thead><tbody>';
         body+='<tr><td>Auxiliares de farmacia</td><td class="num">'+d.nom.auxRed+'</td></tr>';
