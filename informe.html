@@ -12,7 +12,7 @@
 :root[data-theme="dark"]{--bg:#0d1520;--card:#17212f;--tx:#e4e9f0;--mu:#93a1b5;--ln:#2a3647;--ac:#5aa9e6;--hd:#1d2939;--warn:#fb923c;--ok:#5ccf7e;--okbg:#173524;--wa:#f2b84b;--wabg:#3a2e12;--cr:#ff8a80;--crbg:#3d1b1b;--drop:#131c28}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-main{max-width:980px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(36px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+main{max-width:1560px;margin:0 auto;padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(36px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 .brand{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--card);border-radius:12px;border-bottom:3px solid var(--gr);margin-bottom:14px}
 .logo{background:#fff;border-radius:8px;padding:4px 8px;line-height:0;flex:none}.logo img{height:40px}
 .ttl{flex:1;min-width:0}.ttl h1{font-size:18px;margin:0}.ttl p{margin:2px 0 0;color:var(--mu);font-size:12.5px}
@@ -41,6 +41,26 @@ td.ns{font-weight:700}td.pd{color:var(--warn);font-weight:600}.ok{color:var(--ok
 .priv{display:flex;gap:8px;align-items:flex-start;color:var(--mu);font-size:12px;margin-top:12px}.priv svg{flex:none;width:16px;height:16px;margin-top:2px;color:var(--ok)}
 .hide{display:none}
 .foot{display:flex;align-items:center;gap:10px;color:var(--mu);font-size:11.5px;margin-top:8px}.foot img{height:20px;background:#fff;border-radius:4px;padding:2px 5px}
+.pgrid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:16px;align-items:start}
+.pr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chart{border:1px solid var(--ln);border-radius:12px;padding:12px 14px;min-width:0}.chart.w2{grid-column:1/-1}
+.chart h4{margin:0 0 8px;font-size:13px;color:var(--tx)}
+.svg{width:100%;height:auto;display:block}.svgd{width:150px;height:150px;flex:none}
+.lg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:11.5px;color:var(--mu)}.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.dn{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.dl{flex:1;min-width:140px;font-size:12px}
+.dl div{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--ln)}.dl i{width:10px;height:10px;border-radius:3px;flex:none}.dl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dl b{font-variant-numeric:tabular-nums}
+.hb{display:grid;grid-template-columns:minmax(80px,32%) 1fr auto;gap:8px;align-items:center;font-size:12px;padding:3px 0}.hb span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx)}
+.hb .tk{height:10px;border-radius:5px;background:var(--ln);overflow:hidden}.hb .tk i{display:block;height:100%;border-radius:5px;background:var(--ac)}.hb.w .tk i{background:var(--warn)}.hb.g .tk i{background:var(--ok)}
+.kpis.k6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1000px){.pgrid{grid-template-columns:1fr}.pr{grid-template-columns:1fr}.kpis.k6{grid-template-columns:repeat(3,1fr)}}
+.subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.stb{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:999px;padding:7px 12px;cursor:pointer}
+.stb.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.rk td:first-child,.rk th:first-child{text-align:center;width:46px}.rk td:nth-child(2),.rk th:nth-child(2){text-align:left}
+.bar{display:block;height:6px;border-radius:4px;background:var(--ln);margin-top:4px;min-width:90px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}.bar.w i{background:var(--warn)}.bar.g i{background:var(--ok)}
+.rtools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;font-size:12.5px;color:var(--mu)}
+.rtools select{min-height:36px;padding:6px 10px;width:auto}
+.rtools button{font:inherit;font-size:12px;border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:8px;padding:6px 10px;cursor:pointer}
 @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}.brand{padding:10px 12px}.logo img{height:32px}.ttl h1{font-size:16px}.card{padding:14px 12px}td,th{padding:6px 5px}.lf{display:none}}
 @media(min-width:641px){.sf{display:none}}
 </style>
@@ -64,9 +84,16 @@ td.ns{font-weight:700}td.pd{color:var(--warn);font-weight:600}.ok{color:var(--ok
 <section class="card hide" id="s2">
 <p class="step"><i>2</i>Elige el día del informe</p>
 <div class="row"><label class="f">Fecha de dispensación<select id="dia"></select></label></div>
+<div class="row" style="margin-top:12px"><label class="f">Columna del digitador (usuario que registra la dispensación)<select id="usrcol"></select></label></div>
 <details><summary>Bodegas excluidas (avanzado)</summary>
 <p>Texto que, si aparece en "Tipo Comprobante", excluye la línea. Separa con |</p>
 <input type="text" id="excl"><p id="exclInfo"></p></details>
+</section>
+
+<section class="card hide" id="panel">
+<p class="step"><i>&#9733;</i><span id="paneltitle">Panel de resultados</span></p>
+<div class="subtabs" id="stabs"></div>
+<div id="pbody"></div>
 </section>
 
 <section class="card hide" id="s3">
@@ -168,14 +195,26 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   const num = s => { const v = Number(String(s == null ? '' : s).trim()); return Number.isFinite(v) ? v : 0; };
   const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
+  // Detecta la columna que identifica al usuario que digita la dispensación
+  function detectUsr(head) {
+    const pats = [/^usuario\b/i, /digit/i, /^(cajero|vendedor|dispensador|auxiliar|operador)/i, /(registr|elabor|cre[oó]|creado).*(por|usuario)?/i, /usuario|user/i];
+    for (const p of pats) {
+      const i = head.findIndex(h => p.test(String(h).trim()) && !/paciente|cliente|medico|médico|bodega|fecha|hora/i.test(h));
+      if (i >= 0) return i;
+    }
+    return -1;
+  }
+
   // ---------- Lectura del CSV (Detallado de dispensación, separado por |, primera línea = encabezado de empresa)
-  function parse(text, exclPattern) {
+  function parse(text, exclPattern, usrColName) {
     const lines = text.split(/\r?\n/);
     const head = lines[1].split('|');
     const ix = n => { const i = head.indexOf(n); if (i < 0) throw new Error('El archivo no tiene la columna "' + n + '". ¿Es el Detallado de Dispensación?'); return i; };
     const C = { tc: ix('Tipo Comprobante'), doc: ix('Documento'), fd: ix('Fecha Dispensacion'), ini: ix('Fecha y Hora en que Inicia la Dispensacion'),
       dp: ix('Documento Paciente'), ced: ix('Cedula Paciente'), cod: ix('Codigo Articulo'), des: ix('Descripcion'), desc: ix('Descripción Cliente'),
       uni: ix('Unidades'), aut: ix('Cantidad Autorizada'), dif: ix('Diferencia') };
+    let UC = usrColName ? head.indexOf(usrColName) : -1;
+    if (UC < 0) UC = detectUsr(head);
     const excPat = exclPattern || DEFAULT_EXCL;
     const re = excPat ? new RegExp(excPat) : null;
     const rows = [], excluidos = {};
@@ -193,12 +232,73 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       rows.push({
         fecha: `${m[3]}-${m[2]}-${m[1]}`, pto: short(tc), Documento: f[C.doc], pac: ((f[C.dp] || '').trim() + ' ' + (f[C.ced] || '').trim()).trim(),
         cod: (f[C.cod] || '').trim(), des: (f[C.des] || '').trim(), mol: molecula(f[C.desc] || ''),
-        aut: num(f[C.aut]), u, pend, pl: pend > 0 ? 1 : 0, ld: u > 0 ? 1 : 0, h: hm ? Number(hm[1]) : -1,
+        aut: num(f[C.aut]), u, pend, pl: pend > 0 ? 1 : 0, ld: u > 0 ? 1 : 0, h: hm ? Number(hm[1]) : -1, usr: UC >= 0 ? (f[UC] || '').trim() : '',
       });
     }
     const porFecha = {};
     rows.forEach(r => porFecha[r.fecha] = (porFecha[r.fecha] || 0) + 1);
-    return { rows, porFecha, excluidos };
+    return { rows, porFecha, excluidos, columnas: head.map(h => String(h).trim()), usrCol: UC >= 0 ? String(head[UC]).trim() : '' };
+  }
+
+  // ---------- Análisis para el panel (sin generar Excel). KEY: 'YYYY-MM-DD' (un día) | 'M:YYYY-MM' (mes) | '*' (todo el archivo)
+  function resumenDia(rowsAll, KEY) {
+    let df, modo = 'dia';
+    if (KEY === '*') { df = rowsAll; modo = 'periodo'; }
+    else if (KEY.startsWith('M:')) { df = rowsAll.filter(r => r.fecha.slice(0, 7) === KEY.slice(2)); modo = 'periodo'; }
+    else df = rowsAll.filter(r => r.fecha === KEY);
+    if (!df.length) return null;
+    const fechas = [...new Set(df.map(r => r.fecha))].sort();
+    const fl = f => { const [y, m, d] = f.split('-').map(Number); return `${d} ${MES[m].slice(0, 3)} ${y}`; };
+    let DLAB;
+    if (modo === 'dia') { const [Y, Mo, Dd] = KEY.split('-').map(Number); DLAB = `${Dd} de ${MES[Mo]} de ${Y}`; }
+    else if (KEY === '*') DLAB = `Balance total · ${fechas.length} ${fechas.length === 1 ? 'día' : 'días'} (${fl(fechas[0])} al ${fl(fechas[fechas.length - 1])})`;
+    else { const [y, m] = KEY.slice(2).split('-').map(Number); DLAB = `Balance de ${MES[m]} de ${y} · ${fechas.length} ${fechas.length === 1 ? 'día' : 'días'}`; }
+    const sum = (a, k) => a.reduce((s, r) => s + r[k], 0);
+    const dk = r => r.fecha + '|' + r.pto + '|' + r.Documento;
+    function docStats(arr) {
+      const d = {};
+      arr.forEach(r => { const o = d[dk(r)] = d[dk(r)] || { pl: 0, u: 0 }; o.pl += r.pl; o.u += r.u; });
+      let comp = 0, parc = 0, pend = 0;
+      Object.values(d).forEach(o => { if (o.pl === 0) comp++; else if (o.u > 0) parc++; else pend++; });
+      return { fo: Object.keys(d).length, comp, parc, pend };
+    }
+    const byP = {};
+    df.forEach(r => (byP[r.pto] = byP[r.pto] || []).push(r));
+    const puntos = Object.entries(byP).map(([p, a]) => {
+      const ds = docStats(a), ld = a.length, ldi = sum(a, 'ld');
+      return { p, ld, ldi, fo: ds.fo, ns: ld ? ldi / ld : 0, pl: sum(a, 'pl'), pe: sum(a, 'pend'), comp: ds.comp, parc: ds.parc, pend: ds.pend, us: new Set(a.map(r => r.pac)).size };
+    });
+    const byUP = {};
+    df.forEach(r => { const u = r.usr || '(sin usuario)'; (byUP[u + '||' + r.pto] = byUP[u + '||' + r.pto] || { u, p: r.pto, rows: [] }).rows.push(r); });
+    const usrPto = Object.values(byUP).map(o => ({ u: o.u, p: o.p, ld: o.rows.length, ldi: sum(o.rows, 'ld'), fo: new Set(o.rows.map(dk)).size, pl: sum(o.rows, 'pl') }));
+    const tieneUsr = df.some(r => r.usr);
+    const tot = docStats(df);
+
+    // series de tiempo: por hora (un día) o por día (periodo)
+    const keyOf = modo === 'dia' ? (r => r.h) : (r => r.fecha);
+    const rowsK = modo === 'dia' ? df.filter(r => r.h >= 0) : df;
+    let keys = [...new Set(rowsK.map(keyOf))];
+    if (modo === 'dia') { keys.sort((a, b) => a - b); if (keys.length) { const lo = keys[0], hi = keys[keys.length - 1]; keys = []; for (let h = lo; h <= hi; h++) keys.push(h); } }
+    else keys.sort();
+    const labels = modo === 'dia' ? keys.map(h => h + ':00') : keys.map(k => k.slice(8) + '/' + k.slice(5, 7));
+    const idx = new Map(keys.map((k, i) => [k, i])), K = keys.length;
+    const acc = rows => {
+      const o = { ld: Array(K).fill(0), ldi: Array(K).fill(0), pl: Array(K).fill(0), pe: Array(K).fill(0) }, ds = Array.from({ length: K }, () => new Set());
+      rows.forEach(r => { const i = idx.get(keyOf(r)); if (i == null) return; o.ld[i]++; o.ldi[i] += r.ld; o.pl[i] += r.pl; o.pe[i] += r.pend; ds[i].add(dk(r)); });
+      o.fo = ds.map(x => x.size); o.ns = o.ld.map((v, i) => (v ? o.ldi[i] / v : 0));
+      return o;
+    };
+    const ser = { labels, total: acc(rowsK), punto: {}, usr: {} };
+    Object.entries(byP).forEach(([p, a]) => { ser.punto[p] = acc(a.filter(r => idx.has(keyOf(r)))); });
+    const topU = Object.entries(rowsK.reduce((m, r) => { const u = r.usr || ''; if (u) m[u] = (m[u] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
+    topU.forEach(u => { ser.usr[u] = acc(rowsK.filter(r => r.usr === u)); });
+
+    const byM = {};
+    df.filter(r => r.pl === 1).forEach(r => { const o = byM[r.mol] = byM[r.mol] || { m: r.mol, pl: 0, pe: 0 }; o.pl++; o.pe += r.pend; });
+    const topPend = Object.values(byM).sort((a, b) => b.pl - a.pl || b.pe - a.pe).slice(0, 10);
+
+    return { DLAB, modo, dias: fechas.length, puntos, usrPto, tieneUsr, ser, topPend,
+      TOT: { ld: df.length, ldi: sum(df, 'ld'), fo: tot.fo, comp: tot.comp, parc: tot.parc, pend: tot.pend, pl: sum(df, 'pl'), pe: sum(df, 'pend') } };
   }
 
   // ---------- Construcción del libro con ExcelJS
@@ -467,11 +567,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     set(ws2, 16, 1, 'Ranking por líneas con pendiente; desempate por unidades pendientes. "Farmacias afectadas" es un valor calculado al generar el informe (texto azul).').font = F({ size: 9, color: '647187' });
     widths(ws2, [5, 52, 14, 14, 14, 14]);
 
+    // ---------- Mejores digitadores
+    if (df.some(r => r.usr)) {
+      const wsU = mk('Mejores digitadores', GREEN);
+      base_sheet(wsU, `Mejores digitadores · ${DLAB}`);
+      header(wsU, 4, ['#', 'Usuario', 'Farmacia(s)', 'Líneas digitadas', 'Dispensas únicas', 'Líneas dispensadas', 'Nivel de servicio', 'Líneas con pendiente']);
+      const gU = groupBy(df, 'usr');
+      const us = Object.entries(gU).map(([u, a]) => ({ u: u || '(sin usuario)', far: [...new Set(a.map(r => r.pto))].join(' · '), ld: a.length,
+        fo: new Set(a.map(r => r.Documento)).size, ldi: a.reduce((q, r) => q + r.ld, 0), pl: a.reduce((q, r) => q + r.pl, 0) }))
+        .sort((a, b) => b.ld - a.ld || b.fo - a.fo || cmp(a.u, b.u));
+      us.forEach((t, i) => {
+        const row = 5 + i;
+        [i + 1, t.u, t.far, t.ld, t.fo, t.ldi, ratio(t.ldi, t.ld), t.pl].forEach((v, j) => set(wsU, row, 1 + j, v));
+        style_row(wsU, row, 8); cell(wsU, row, 7).numFmt = '0.0%'; cell(wsU, row, 1).numFmt = '0';
+      });
+      widths(wsU, [5, 34, 40, 14, 14, 14, 13, 14]);
+    }
+
     const buf = await wb.xlsx.writeBuffer();
     return { buf, resumen: { DLAB, TOT, est, td, tpn, otros: otros.length, otrosFo: new Set(otros.map(r => r.Documento)).size, ns: ratio(TOT.ldi, TOT.ld), horas: { HRS, colTot } } };
   }
 
-  root.InformeDispensacion = { parse, build, molecula, short, title, DEFAULT_EXCL, MES };
+  root.InformeDispensacion = { parse, build, resumenDia, detectUsr, molecula, short, title, DEFAULT_EXCL, MES };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>
@@ -487,17 +604,25 @@ const fdate=d=>{const [y,m,dd]=d.split('-').map(Number);const w=['domingo','lune
 
 function analizar(){
   if(!TEXT) return;
-  try{ PARSED=E.parse(TEXT,$('excl').value.trim()||E.DEFAULT_EXCL); }
+  let prevU=$('usrcol').value; if(!prevU){ try{ prevU=localStorage.getItem('inf_usrcol')||''; }catch(_){} }
+  try{ PARSED=E.parse(TEXT,$('excl').value.trim()||E.DEFAULT_EXCL,prevU||undefined); }
   catch(e){ msg('m1',e.message,'err'); ['s2','s3','prev'].forEach(i=>$(i).classList.add('hide')); return; }
   const fechas=Object.entries(PARSED.porFecha).sort((a,b)=>b[1]-a[1]);
   if(!fechas.length){ msg('m1','No se encontraron líneas válidas en el archivo.','err'); return; }
   const prevSel=$('dia').value;
-  $('dia').innerHTML=fechas.sort((a,b)=>a[0]<b[0]?-1:1).map(([d,c])=>`<option value="${d}">${fdate(d)} · ${n(c)} líneas</option>`).join('');
+  const meses=[...new Set(Object.keys(PARSED.porFecha).map(d=>d.slice(0,7)))].sort();
+  const totL=Object.values(PARSED.porFecha).reduce((a,b)=>a+b,0), nd=Object.keys(PARSED.porFecha).length;
+  let optT=`<option value="*">★ Balance total del archivo · ${nd} ${nd===1?'día':'días'} · ${n(totL)} líneas</option>`;
+  if(meses.length>1) optT+=meses.map(m=>{const [y,mm]=m.split('-').map(Number);const c=Object.entries(PARSED.porFecha).filter(([d])=>d.slice(0,7)===m).reduce((a,[,v])=>a+v,0);return `<option value="M:${m}">★ Balance de ${E.MES[mm]} de ${y} · ${n(c)} líneas</option>`}).join('');
+  $('dia').innerHTML=optT+fechas.sort((a,b)=>a[0]<b[0]?-1:1).map(([d,c])=>`<option value="${d}">${fdate(d)} · ${n(c)} líneas</option>`).join('');
   const best=Object.entries(PARSED.porFecha).sort((a,b)=>b[1]-a[1])[0][0];
-  $('dia').value=(prevSel&&PARSED.porFecha[prevSel])?prevSel:best;
+  $('dia').value=prevSel; if($('dia').value!==prevSel||!prevSel) $('dia').value=best;
   const ex=Object.entries(PARSED.excluidos);
   $('exclInfo').textContent=ex.length?'Excluidas en este archivo: '+ex.map(([k,v])=>`${k} (${v})`).join(', '):'No hay líneas excluidas en este archivo.';
+  $('usrcol').innerHTML='<option value="">(sin columna de usuario)</option>'+PARSED.columnas.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('usrcol').value=PARSED.usrCol||'';
   clr('m1'); $('s2').classList.remove('hide'); $('s3').classList.remove('hide');
+  renderPanel(); updGo();
 }
 function leer(file){
   if(!file) return;
@@ -514,7 +639,196 @@ const dz=$('drop');
 ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over')}));
 dz.addEventListener('drop',e=>leer(e.dataTransfer.files[0]));
 $('excl').addEventListener('change',analizar);
-$('dia').addEventListener('change',()=>{$('prev').classList.add('hide');clr('m3')});
+$('dia').addEventListener('change',()=>{$('prev').classList.add('hide');clr('m3');renderPanel();updGo()});
+function updGo(){ const v=$('dia').value, tot=(v==='*'||v.startsWith('M:')); $('go').disabled=tot; if(tot) msg('m3','El Excel se genera por un día: elige un día específico en el paso 2. El panel de arriba sí muestra el balance total.','inf'); else clr('m3'); }
+$('usrcol').addEventListener('change',()=>{ try{ localStorage.setItem('inf_usrcol',$('usrcol').value); }catch(_){} analizar(); });
+
+/* ====== PANEL DE RESULTADOS (sin generar Excel) ====== */
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const PAL=['#005898','#85c226','#f59e0b','#c62828','#7c3aed','#0891b2','#db2777','#64748b'];
+const TABS=[['resumen','Resumen / balance'],
+  ['lineas','Líneas dispensadas'],['disp','Dispensas realizadas'],['ns','Nivel de servicio'],['pend','Pendientes generados'],
+  ['comp','Dispensas completas'],['parc','Parciales y pendientes'],['dig','Mejores digitadores']];
+let RES=null, TAB='resumen', ASC=false, FILT='';
+const MED=['🥇','🥈','🥉'];
+const tx=(x,y,t,o)=>{o=o||{};return `<text x="${x}" y="${y}" font-size="${o.s||10}" text-anchor="${o.a||'middle'}" style="fill:var(--mu)"${o.r?` transform="rotate(${o.r} ${x} ${y})"`:''}>${esc(t)}</text>`};
+const cut=(t,k)=>{t=String(t);return t.length>k?t.slice(0,k-1)+'…':t};
+function niceMax(v){ if(!(v>0)) return 1; const p=Math.pow(10,Math.floor(Math.log10(v))), m=v/p; return (m<=1?1:m<=2?2:m<=5?5:10)*p; }
+function legend(items){ return `<div class="lg">${items.map(i=>`<span><i style="background:${i.color}"></i>${esc(i.name)}</span>`).join('')}</div>`; }
+const card=(t,h,w2)=>`<div class="chart${w2?' w2':''}"><h4>${esc(t)}</h4>${h}</div>`;
+const wrap=(l,c)=>`<div class="pgrid"><div class="pl">${l}</div><div class="pr">${c}</div></div>`;
+
+function axes(W,H,L,R,T,B,mx,fm){
+  let g='';
+  for(let k=0;k<=4;k++){const v=mx*k/4,y=T+(H-T-B)*(1-v/mx); g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" style="stroke:var(--ln)"/>`+tx(L-6,y+3,fm(v),{a:'end'});}
+  return g;
+}
+function lineChart(labels,series,o){
+  o=o||{}; const fm=o.pct?pc:n;
+  if(!labels.length) return '<p class="note">Sin datos de hora o fecha para graficar.</p>';
+  const W=640,H=250,L=46,R=14,T=14,B=34;
+  let mx=Math.max(1e-9,...series.flatMap(s=>s.vals)); mx=o.pct?Math.min(1,niceMax(mx*1.05)):niceMax(mx);
+  const X=i=>labels.length>1?L+(W-L-R)*i/(labels.length-1):(L+W-R)/2, Y=v=>T+(H-T-B)*(1-v/mx);
+  let g=axes(W,H,L,R,T,B,mx,fm); const step=Math.ceil(labels.length/10);
+  labels.forEach((lb,i)=>{ if(i%step===0) g+=tx(X(i),H-B+14,lb); });
+  series.forEach(s=>{
+    const pts=s.vals.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+    if(series.length===1) g+=`<polygon points="${X(0)},${Y(0)} ${pts.join(' ')} ${X(labels.length-1)},${Y(0)}" fill="${s.color}" opacity=".13"/>`;
+    g+=`<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>`;
+    s.vals.forEach((v,i)=>{ g+=`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3.4" fill="${s.color}"><title>${esc(s.name)} · ${esc(labels[i])}: ${fm(v)}</title></circle>`; });
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="svg">${g}</svg>`+(series.length>1?legend(series):'');
+}
+function gbars(cats,series,o){
+  o=o||{}; const fm=o.pct?pc:n;
+  if(!cats.length) return '<p class="note">Sin datos.</p>';
+  const W=o.wide?640:440,H=250,L=40,R=8,T=16,B=50;
+  let mx=o.stack?Math.max(1e-9,...cats.map((c,i)=>series.reduce((a,s)=>a+s.vals[i],0))):Math.max(1e-9,...series.flatMap(s=>s.vals));
+  mx=o.pct?1:niceMax(mx);
+  const Y=v=>T+(H-T-B)*(1-v/mx), bw=(W-L-R)/cats.length, gw=bw*0.72;
+  let g=axes(W,H,L,R,T,B,mx,fm);
+  cats.forEach((c,i)=>{
+    const x0=L+bw*i+(bw-gw)/2;
+    if(o.stack){ let ac=0; series.forEach(s=>{const v=s.vals[i],y1=Y(ac+v),y0=Y(ac); g+=`<rect x="${x0}" y="${y1}" width="${gw}" height="${Math.max(0,y0-y1)}" fill="${s.color}"><title>${esc(c)} · ${esc(s.name)}: ${fm(v)}</title></rect>`; ac+=v;}); }
+    else { const sw=gw/series.length; series.forEach((s,j)=>{const v=s.vals[i]; g+=`<rect x="${(x0+sw*j).toFixed(1)}" y="${Y(v)}" width="${(sw-2).toFixed(1)}" height="${Math.max(0,Y(0)-Y(v))}" rx="2" fill="${s.color}"><title>${esc(c)} · ${esc(s.name)}: ${fm(v)}</title></rect>`+(cats.length<=8?tx(x0+sw*j+(sw-2)/2,Y(v)-4,fm(v),{s:9}):'');}); }
+    const lx=L+bw*i+bw/2; g+=cats.length>5?tx(lx,H-B+12,cut(c,16),{a:'end',r:-28}):tx(lx,H-B+14,cut(c,18));
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="svg">${g}</svg>`+(series.length>1?legend(series):'');
+}
+function donut(items,o){
+  o=o||{}; items=items.filter(i=>i.value>0); const tot=items.reduce((a,i)=>a+i.value,0);
+  if(!tot) return '<p class="note">Sin datos.</p>';
+  const r=58,C=2*Math.PI*r; let off=0,g='';
+  items.forEach((it,i)=>{ it.color=it.color||PAL[i%PAL.length]; const len=C*it.value/tot;
+    g+=`<circle r="${r}" cx="80" cy="80" fill="none" stroke="${it.color}" stroke-width="26" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)"><title>${esc(it.label)}: ${n(it.value)} (${pc(it.value/tot)})</title></circle>`; off+=len; });
+  g+=`<text x="80" y="82" text-anchor="middle" font-size="19" font-weight="700" style="fill:var(--tx)">${esc(o.center||n(tot))}</text>`+(o.sub?`<text x="80" y="98" text-anchor="middle" font-size="9" style="fill:var(--mu)">${esc(o.sub)}</text>`:'');
+  return `<div class="dn"><svg viewBox="0 0 160 160" class="svgd">${g}</svg><div class="dl">${items.map(i=>`<div><i style="background:${i.color}"></i><span title="${esc(i.label)}">${esc(i.label)}</span><b>${n(i.value)} · ${pc(i.value/tot)}</b></div>`).join('')}</div></div>`;
+}
+function hbars(items,o){
+  o=o||{}; const fm=o.pct?pc:n; const mx=Math.max(1e-9,...items.map(i=>i.value));
+  if(!items.length) return '<p class="note">Sin datos.</p>';
+  return items.map(i=>`<div class="hb ${o.cls||''}"><span title="${esc(i.label)}">${esc(i.label)}</span><div class="tk"><i style="width:${Math.max(2,Math.round(100*i.value/mx))}%"></i></div><b>${fm(i.value)}</b></div>`).join('');
+}
+
+function rankTable(list,key,opts){
+  opts=opts||{};
+  const arr=list.slice().sort((a,b)=>(ASC?1:-1)*((a[key]-b[key])||0)||String(a.nombre).localeCompare(String(b.nombre)));
+  const max=Math.max(1e-9,...arr.map(x=>x[key]));
+  const body=arr.map((x,i)=>{
+    const v=x[key], w=Math.round(100*v/max);
+    const pos=opts.bad?(i+1):(i<3&&!ASC?MED[i]:(i+1));
+    const val=opts.pct?pc(v):n(v);
+    return `<tr><td>${pos}</td><td>${esc(x.nombre)}</td><td><b>${val}</b><span class="bar ${opts.bad?'w':(opts.pct?'g':'')}"><i style="width:${w}%"></i></span></td>${(opts.extra||[]).map(f=>`<td>${f(x)}</td>`).join('')}</tr>`;
+  }).join('');
+  const head=`<tr><th>#</th><th>${opts.first||'Punto de dispensación'}</th><th>${opts.label}</th>${(opts.xh||[]).map(h=>`<th>${h}</th>`).join('')}</tr>`;
+  return `<div class="sx"><table class="rk"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+const tools=extra=>`<div class="rtools"><button id="ordBtn">${ASC?'↑ Menor a mayor':'↓ Mayor a menor'} (cambiar)</button>${extra||''}</div>`;
+const oneNote=()=>RES.puntos.length<2?'<p class="note" style="margin:0 0 8px">Este archivo tiene un solo punto de dispensación; la comparación entre puntos aplica con 2 o más.</p>':'';
+const tTitle=()=>RES.modo==='dia'?'por hora del día':'por día';
+
+/* series por punto (máx. 6) o total */
+function timeSeries(metric){
+  const S=RES.ser, ps=Object.keys(S.punto);
+  if(ps.length>1&&ps.length<=6) return ps.map((p,i)=>({name:p,vals:S.punto[p][metric],color:PAL[i]}));
+  return [{name:'Total',vals:S.total[metric],color:PAL[0]}];
+}
+const puntoCats=()=>RES.puntos.map(p=>p.p);
+
+function chartsPuntos(tab){
+  const P=RES.puntos, C=puntoCats(), S=RES.ser; let h='';
+  const share=k=>donut(P.map(p=>({label:p.p,value:p[k]})));
+  if(tab==='lineas'){
+    h+=card('Líneas digitadas vs dispensadas por punto',gbars(C,[{name:'Digitadas',vals:P.map(p=>p.ld),color:PAL[0]},{name:'Dispensadas',vals:P.map(p=>p.ldi),color:PAL[1]}]));
+    h+=card('Participación en líneas dispensadas',share('ldi'));
+    h+=card('Curva de líneas dispensadas '+tTitle(),lineChart(S.labels,timeSeries('ldi')),true);
+  }else if(tab==='disp'){
+    h+=card('Dispensas realizadas por punto',gbars(C,[{name:'Dispensas',vals:P.map(p=>p.fo),color:PAL[0]}]));
+    h+=card('Participación en dispensas',share('fo'));
+    h+=card('Curva de dispensas '+tTitle(),lineChart(S.labels,timeSeries('fo')),true);
+  }else if(tab==='ns'){
+    h+=card('Nivel de servicio por punto',hbars(P.slice().sort((a,b)=>b.ns-a.ns).map(p=>({label:p.p,value:p.ns})),{pct:true,cls:'g'}));
+    h+=card('Líneas dispensadas vs no dispensadas',donut([{label:'Dispensadas',value:RES.TOT.ldi,color:PAL[1]},{label:'Sin dispensar (pendiente)',value:RES.TOT.ld-RES.TOT.ldi,color:PAL[3]}],{center:pc(RES.TOT.ld?RES.TOT.ldi/RES.TOT.ld:0),sub:'nivel de servicio'}));
+    h+=card('Curva del nivel de servicio '+tTitle(),lineChart(S.labels,timeSeries('ns'),{pct:true}),true);
+  }else if(tab==='pend'){
+    h+=card('Líneas con pendiente por punto',gbars(C,[{name:'Líneas con pendiente',vals:P.map(p=>p.pl),color:PAL[3]}]));
+    h+=card('Participación en pendientes',share('pl'));
+    h+=card('Top moléculas con más pendientes',hbars(RES.topPend.map(t=>({label:t.m,value:t.pl})),{cls:'w'}));
+    h+=card('Curva de pendientes '+tTitle(),lineChart(S.labels,timeSeries('pl')));
+  }
+  return h;
+}
+function chartsEstado(){
+  const P=RES.puntos, C=puntoCats(), T=RES.TOT;
+  let h=card('Estado de las dispensas por punto',gbars(C,[{name:'Completas',vals:P.map(p=>p.comp),color:PAL[1]},{name:'Parciales',vals:P.map(p=>p.parc),color:PAL[2]},{name:'Pendientes',vals:P.map(p=>p.pend),color:PAL[3]}],{stack:true}));
+  h+=card('Distribución total de dispensas',donut([{label:'Completas',value:T.comp,color:PAL[1]},{label:'Parciales',value:T.parc,color:PAL[2]},{label:'Pendientes (sin entrega)',value:T.pend,color:PAL[3]}],{center:pc(T.fo?T.comp/T.fo:0),sub:'completas'}));
+  return h;
+}
+
+function panelPuntos(key,label,opts){
+  const L=RES.puntos.map(p=>Object.assign({nombre:p.p},p));
+  return tools()+oneNote()+rankTable(L,key,Object.assign({label},opts||{}));
+}
+function panelParc(){
+  const L=RES.puntos.map(p=>Object.assign({nombre:p.p,pp:p.parc+p.pend},p));
+  return tools()+oneNote()+rankTable(L,'pp',{label:'Parciales + pendientes',bad:true,xh:['Parciales','Pendientes (sin entrega)','Del total de dispensas'],extra:[p=>n(p.parc),p=>n(p.pend),p=>pc(p.fo?(p.parc+p.pend)/p.fo:0)]})
+    +'<p class="note"><b>Parcial</b>: la dispensa entregó algo pero dejó al menos una línea con pendiente. <b>Pendiente</b>: no se entregó ninguna unidad de la fórmula.</p>';
+}
+function panelResumen(){
+  const T=RES.TOT, S=RES.ser, P=RES.puntos;
+  const k=[['Dispensas',n(T.fo),''],['Líneas digitadas',n(T.ld),''],['Líneas dispensadas',n(T.ldi),''],['Nivel de servicio',pc(T.ld?T.ldi/T.ld:0),'ns'],['Líneas con pendiente',n(T.pl),'w'],['Dispensas completas',pc(T.fo?T.comp/T.fo:0),'']];
+  const kp=`<div class="kpis k6">${k.map(([a,b,c])=>`<div class="kpi ${c}"><span>${a}</span><b>${b}</b></div>`).join('')}</div>`;
+  const rows=P.slice().sort((a,b)=>b.fo-a.fo).map(p=>`<tr><td>${esc(p.p)}</td><td>${n(p.fo)}</td><td>${n(p.ld)}</td><td>${n(p.ldi)}</td><td class="ns ${cls(p.ns)}">${pc(p.ns)}</td><td class="pd">${n(p.pl)}</td><td>${n(p.comp)}</td><td>${n(p.parc)}</td><td>${n(p.pend)}</td></tr>`).join('');
+  const tbl=`<div class="sx"><table><thead><tr><th>Punto</th><th>Dispensas</th><th>Líneas digit.</th><th>Líneas disp.</th><th>Nivel serv.</th><th>Pend. (líneas)</th><th>Completas</th><th>Parciales</th><th>Pendientes</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  let c=card('Curva de líneas digitadas y dispensadas '+tTitle(),lineChart(S.labels,[{name:'Digitadas',vals:S.total.ld,color:PAL[0]},{name:'Dispensadas',vals:S.total.ldi,color:PAL[1]},{name:'Con pendiente',vals:S.total.pl,color:PAL[3]}]),true);
+  c+=chartsEstado();
+  c+=card('Nivel de servicio por punto',hbars(P.slice().sort((a,b)=>b.ns-a.ns).map(p=>({label:p.p,value:p.ns})),{pct:true,cls:'g'}));
+  c+=card('Participación en dispensas',donut(P.map(p=>({label:p.p,value:p.fo}))));
+  c+=card('Curva del nivel de servicio '+tTitle(),lineChart(S.labels,timeSeries('ns'),{pct:true}),true);
+  return kp+wrap(tbl,c);
+}
+function panelDig(){
+  if(!RES.tieneUsr) return '<p class="note">No se detectó una columna de usuario en el archivo. Elige la columna del digitador en el paso 2 (campo «Columna del digitador»).</p>';
+  const pts=[...new Set(RES.usrPto.map(x=>x.p))].sort();
+  const fsel=`<label>Punto: <select id="fPunto"><option value="">Todos los puntos</option>${pts.map(p=>`<option value="${esc(p)}"${p===FILT?' selected':''}>${esc(p)}</option>`).join('')}</select></label>`;
+  const m={};
+  RES.usrPto.filter(x=>!FILT||x.p===FILT).forEach(x=>{const o=m[x.u]=m[x.u]||{nombre:x.u,ld:0,ldi:0,fo:0,pl:0,pts:new Set()};o.ld+=x.ld;o.ldi+=x.ldi;o.fo+=x.fo;o.pl+=x.pl;o.pts.add(x.p);});
+  const L=Object.values(m).map(o=>Object.assign(o,{ns:o.ld?o.ldi/o.ld:0}));
+  const far=o=>[...o.pts].map(esc).join(' · ');
+  const t1=rankTable(L,'ld',{label:'Líneas digitadas',first:'Digitador (auxiliar)',xh:['Farmacia','Dispensas únicas','Nivel servicio'],extra:[far,o=>n(o.fo),o=>pc(o.ns)]});
+  const t2=rankTable(L,'fo',{label:'Dispensas únicas',first:'Digitador (auxiliar)',xh:['Farmacia','Líneas digit.','Nivel servicio'],extra:[far,o=>n(o.ld),o=>pc(o.ns)]});
+  const left=tools(fsel)+`<p class="step" style="margin:6px 0">Mejores digitadores · por líneas digitadas</p>${t1}<p class="step" style="margin:16px 0 6px">Mejores digitadores · por dispensas únicas</p>${t2}<p class="note">Una dispensa única es una fórmula (documento) distinta; las líneas son los medicamentos digitados dentro de ellas.</p>`;
+  const top=L.slice().sort((a,b)=>b.ld-a.ld).slice(0,10), topF=L.slice().sort((a,b)=>b.fo-a.fo).slice(0,10);
+  let c=card('Top 10 · líneas digitadas',hbars(top.map(o=>({label:o.nombre,value:o.ld}))));
+  c+=card('Top 10 · dispensas únicas',hbars(topF.map(o=>({label:o.nombre,value:o.fo})),{cls:'g'}));
+  const dItems=FILT?top.slice(0,8).map(o=>({label:o.nombre,value:o.ld})):(()=>{const q={};RES.usrPto.forEach(x=>q[x.p]=(q[x.p]||0)+x.ld);return Object.entries(q).map(([p,v])=>({label:p,value:v}));})();
+  c+=card(FILT?'Participación de digitadores en '+FILT:'Líneas digitadas por punto',donut(dItems));
+  c+=card('Top 10 · nivel de servicio del digitador',hbars(L.filter(o=>o.ld>=5).sort((a,b)=>b.ns-a.ns).slice(0,10).map(o=>({label:o.nombre,value:o.ns})),{pct:true,cls:'g'}));
+  const S=RES.ser, names=top.map(o=>o.nombre).filter(u=>S.usr[u]).slice(0,5);
+  if(names.length) c+=card('Curva de líneas digitadas por digitador '+tTitle(),lineChart(S.labels,names.map((u,i)=>({name:u,vals:S.usr[u].ld,color:PAL[i]}))),true);
+  return wrap(left,c);
+}
+function renderPanel(){
+  if(!PARSED){return}
+  const dia=$('dia').value; RES=E.resumenDia(PARSED.rows,dia);
+  if(!RES){ $('panel').classList.add('hide'); return; }
+  $('panel').classList.remove('hide');
+  $('paneltitle').textContent='Panel · '+RES.DLAB+' · '+RES.puntos.length+(RES.puntos.length===1?' punto':' puntos');
+  $('stabs').innerHTML=TABS.map(([k,l])=>`<button class="stb${k===TAB?' on':''}" data-t="${k}">${l}</button>`).join('');
+  $('stabs').querySelectorAll('.stb').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;renderPanel()});
+  let h='';
+  if(TAB==='resumen') h=panelResumen();
+  else if(TAB==='lineas') h=wrap(panelPuntos('ldi','Líneas dispensadas',{xh:['Líneas digitadas','Nivel de servicio'],extra:[p=>n(p.ld),p=>pc(p.ns)]}),chartsPuntos('lineas'));
+  else if(TAB==='disp') h=wrap(panelPuntos('fo','Dispensas realizadas',{xh:['Usuarios atendidos','Líneas digitadas'],extra:[p=>n(p.us),p=>n(p.ld)]}),chartsPuntos('disp'));
+  else if(TAB==='ns') h=wrap(panelPuntos('ns','Nivel de servicio',{pct:true,xh:['Líneas dispensadas','Líneas digitadas'],extra:[p=>n(p.ldi),p=>n(p.ld)]}),chartsPuntos('ns'));
+  else if(TAB==='pend') h=wrap(panelPuntos('pl','Líneas con pendiente',{bad:true,xh:['Unidades pendientes','Del total de líneas'],extra:[p=>n(p.pe),p=>pc(p.ld?p.pl/p.ld:0)]}),chartsPuntos('pend'));
+  else if(TAB==='comp') h=wrap(panelPuntos('comp','Dispensas completas',{xh:['Dispensas realizadas','% completas'],extra:[p=>n(p.fo),p=>pc(p.fo?p.comp/p.fo:0)]}),chartsEstado());
+  else if(TAB==='parc') h=wrap(panelParc(),chartsEstado());
+  else h=panelDig();
+  $('pbody').innerHTML=h;
+  const ob=$('ordBtn'); if(ob) ob.onclick=()=>{ASC=!ASC;renderPanel()};
+  const fp=$('fPunto'); if(fp) fp.onchange=()=>{FILT=fp.value;renderPanel()};
+}
 
 function descargar(){
   if(!LAST) return;
@@ -524,7 +838,7 @@ function descargar(){
 }
 $('again').addEventListener('click',descargar);
 $('go').addEventListener('click',async()=>{
-  const dia=$('dia').value; const b=$('go'); b.disabled=true; msg('m3','Generando el informe…','inf');
+  const dia=$('dia').value; if(dia==='*'||dia.startsWith('M:')) return; const b=$('go'); b.disabled=true; msg('m3','Generando el informe…','inf');
   try{
     const exEntries=Object.entries(PARSED.excluidos||{});
     const exclText=exEntries.length?exEntries.map(([k,v])=>`${k} (${v})`).join(', '):'ninguno (se publica la información completa de todos los puntos de dispensación, sin restricción de bodegas).';
