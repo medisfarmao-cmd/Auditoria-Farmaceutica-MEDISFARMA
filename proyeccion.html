@@ -527,8 +527,8 @@ function calcContrato(pob, c, horario) {
   var umbMens     = c.umbralMens  || 13000;
   var auxPerAudit = c.auxPorAudit || 8;
 
-  var formDiaTot  = pobObj / c.dias;
-  var usrDiaTot   = formDiaTot / fpu;
+  var usrDiaTot   = pobObj / c.dias;      /* usuarios/día = población objetivo ÷ días hábiles */
+  var formDiaTot  = usrDiaTot * fpu;      /* fórmulas/día = usuarios/día × 1.6 */
   var usrPunto    = usrDiaTot / pts;
   var formPunto   = usrPunto * fpu;
   var pobObjPunto = pobObj / pts;
