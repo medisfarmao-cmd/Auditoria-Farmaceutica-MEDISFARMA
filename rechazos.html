@@ -909,6 +909,33 @@ function supervisorForComprobante(raw){
   const key = normalizeComprobanteKey(raw);
   return COMPROBANTE_SUPERVISOR_MAP[key] || 'SIN SUPERVISOR ASIGNADO';
 }
+// Diagnóstico cargado por el Director (pestaña Director de la app): reemplaza el mapa estático.
+function applySharedDiag(sh){
+  try{
+    const rows = sh.rows || [];
+    const T = v => String(v==null?'':v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+    const hi = rows.findIndex(r => r && r.some(v=>T(v)==='BODEGA') && r.some(v=>T(v)==='ESTADO'));
+    if (hi < 0) return false;
+    const H = rows[hi].map(T), iT = H.indexOf('TIPO DE COMPROBANTE'), iS = H.indexOf('SUPERVISOR ENCARGADO');
+    if (iT < 0 || iS < 0) return false;
+    const m = {};
+    rows.slice(hi+1).forEach(r => {
+      const tc = r[iT]; if (!tc || String(tc).trim().toUpperCase()==='N/A') return;
+      const name = String(r[iS]==null?'':r[iS]).split('\n')[0].replace(/[\d\s]{7,}$/,'').trim();
+      if (name) m[normalizeComprobanteKey(tc)] = name.toUpperCase();
+    });
+    if (!Object.keys(m).length) return false;
+    Object.keys(COMPROBANTE_SUPERVISOR_MAP).forEach(k => delete COMPROBANTE_SUPERVISOR_MAP[k]);
+    Object.assign(COMPROBANTE_SUPERVISOR_MAP, m);
+    return true;
+  }catch(e){ console.warn('Diagnóstico compartido no aplicado', e); return false; }
+}
+try{ const sh = JSON.parse(localStorage.getItem('medis_diag_v1')||'null'); if (sh) applySharedDiag(sh); }catch(_){}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !e.data || e.data.type !== 'medis-diag' || !e.data.diag) return;
+  try{ localStorage.setItem('medis_diag_v1', JSON.stringify(e.data.diag)); }catch(_){}
+  applySharedDiag(e.data.diag);
+});
 
 
 function consolidatedEntityName(raw){
