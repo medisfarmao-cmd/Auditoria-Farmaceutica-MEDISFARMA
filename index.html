@@ -1920,6 +1920,54 @@ function cellToPhoneStr(raw){
   if(typeof raw === "number") return String(Math.round(raw));
   return String(raw).split("\n")[0].trim();
 }
+
+/* Diagnóstico compartido con las herramientas externas (turnos, rechazos, informe).
+   Se guarda en app_data (master:diagnostico) y se entrega a los iframes por localStorage
+   (mismo origen) y postMessage. */
+const DiagTools = {
+  KEY:"master:diagnostico", LS:"medis_diag_v1", cache:null, loaded:false,
+  async ensure(force){
+    if(this.loaded && !force) return this.cache;
+    const v = await loadMaster(this.KEY, true);
+    this.loaded = true;
+    if(v && Array.isArray(v.rows) && v.rows.length) this.cache = v;
+    this.persistLocal(); this.renderStatus();
+    return this.cache;
+  },
+  persistLocal(){ try{ if(this.cache) localStorage.setItem(this.LS, JSON.stringify(this.cache)); }catch(_){} },
+  postTo(f){ try{ if(this.cache && f && f.contentWindow) f.contentWindow.postMessage({type:"medis-diag", diag:this.cache}, location.origin); }catch(_){} },
+  broadcast(){ ["turnosFrame","rechazosFrame","informeFrame","proyeccionFrame"].forEach(id=>{ const f=document.getElementById(id); if(f && f.getAttribute("src")) this.postTo(f); }); },
+  renderStatus(){
+    const el = document.getElementById("diagToolsStatus"); if(!el) return;
+    const c = this.cache;
+    el.textContent = c ? `Vigente: ${c.name||"diagnóstico"} · ${c.n||"?"} filas · cargado ${c.ts?new Date(c.ts).toLocaleString("es-CO"):""}${c.by?" por "+c.by:""}` : "Aún no hay diagnóstico cargado aquí: las herramientas usan el que traen por defecto.";
+  },
+  async upload(){
+    if(typeof XLSX === "undefined"){ alert("No se pudo cargar el lector de Excel (se requiere conexión a internet)."); return; }
+    const input = document.getElementById("diagToolsFileInput");
+    const file = input && input.files[0];
+    if(!file){ alert("Selecciona primero el archivo .xlsx del diagnóstico (MM-GO-FO-019)."); return; }
+    try{
+      const wb = XLSX.read(await file.arrayBuffer(), {type:"array"});
+      const sn = wb.SheetNames.find(n=>/DIRECTORIO$/i.test(n.trim())) || wb.SheetNames[0];
+      let rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, defval:""});
+      const T = v=>String(v==null?"":v).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
+      const hi = rows.slice(0,10).findIndex(r=>r.some(v=>T(v)==="BODEGA") && r.some(v=>T(v)==="ESTADO"));
+      if(hi<0){ alert("No parece el diagnóstico MM-GO-FO-019: no se encontró la fila de encabezados (BODEGA, ESTADO)."); return; }
+      rows = rows.map(r=>{ r=r.map(v=>typeof v==="string"?v.trim():v); while(r.length && (r[r.length-1]===""||r[r.length-1]==null)) r.pop(); return r; }).filter(r=>r.length);
+      const n = rows.length - (hi+1);
+      if(!confirm(`Se aplicará el diagnóstico «${file.name}» (${n} filas) en Turnos, Rechazos e Informe de dispensación para todos los usuarios. ¿Continuar?`)) return;
+      const cache = {name:file.name, ts:new Date().toISOString(), by:(SESSION&&SESSION.nombre)||"", n, rows};
+      const ok = await saveMaster(this.KEY, cache);
+      this.cache = cache; this.loaded = true; this.persistLocal(); this.broadcast(); this.renderStatus();
+      input.value = "";
+      alert(ok ? "Listo. El diagnóstico quedó guardado y se aplica automáticamente en las herramientas." : "Se aplicó en este navegador, pero NO se pudo guardar en la nube: otros usuarios no lo verán. Reintenta.");
+    }catch(err){
+      console.error("Error cargando diagnóstico para herramientas:", err);
+      alert("No se pudo leer el archivo. Verifica que sea el .xlsx del diagnóstico MM-GO-FO-019.");
+    }
+  }
+};
 const PointsDiagnostico = {
   async upload(){
     if(typeof XLSX === "undefined"){ alert("No se pudo cargar el lector de Excel (se requiere conexión a internet)."); return; }
@@ -6682,6 +6730,11 @@ function renderMantenimientoGeneral(){
    DIRECTOR (solo Administrador): backup, contraseñas y cumplimiento
    ========================================================= */
 function renderDirectorPuntos(){
+  renderDirectorPuntosBase();
+  DiagTools.renderStatus();
+  if(!DiagTools.loaded) DiagTools.ensure();
+}
+function renderDirectorPuntosBase(){
   const el = document.getElementById("dirsub-puntos");
   if(!el) return;
   el.innerHTML = `
@@ -6693,6 +6746,15 @@ function renderDirectorPuntos(){
         <button class="btn btn-ghost btn-sm" onclick="PointsBulk.downloadTemplate()">⬇ Descargar plantilla Excel</button>
         <label class="f">Archivo con los puntos<input type="file" id="bulkPointsFileInput" accept=".xlsx,.xls"></label>
         <button class="btn btn-primary btn-sm" onclick="PointsBulk.upload()">⬆ Subir y crear puntos</button>
+      </div>
+    </div>
+    <div class="panel" style="border-color:var(--teal-700,#0f766e);">
+      <h4 style="margin-top:0;">🔗 Diagnóstico para las herramientas (Turnos, Rechazos/No facturables, Informe de dispensación)</h4>
+      <p style="font-size:12px;">Sube aquí el diagnóstico MM-GO-FO-019 (hoja DIRECTORIO). Se guarda en la nube y se aplica automáticamente en Auditoría de turnos, Dispensaciones no facturables e Informe de dispensación (supervisor, departamento, municipio, punto, entidad), para todos los usuarios.</p>
+      <p style="font-size:12px;font-weight:600;" id="diagToolsStatus">Consultando diagnóstico vigente…</p>
+      <div class="inline-form">
+        <label class="f">Archivo de diagnóstico<input type="file" id="diagToolsFileInput" accept=".xlsx,.xls"></label>
+        <button class="btn btn-primary btn-sm" onclick="DiagTools.upload()">⬆ Cargar y aplicar a las herramientas</button>
       </div>
     </div>
     <div class="panel" style="border-color:var(--amber-500,#d97706);background:var(--amber-100,#fef3c7);">
@@ -7479,12 +7541,16 @@ const App = {
   loadTurnosFrame(iframeId){
     const f = document.getElementById(iframeId);
     if(!f || !f.dataset.src) return;
-    let src = f.dataset.src;
-    if(iframeId==="proyeccionFrame"){
-      const rol = (SESSION && SESSION.role==="admin") ? "director" : "otro";
-      src += (src.indexOf("?")>=0?"&":"?") + "rol=" + encodeURIComponent(rol);
-    }
-    if(f.getAttribute("src")!==src) f.src = src;
+    if(!f._dg){ f._dg = true; f.addEventListener("load", ()=>DiagTools.postTo(f)); }
+    const go = ()=>{
+      let src = f.dataset.src;
+      if(iframeId==="proyeccionFrame"){
+        const rol = (SESSION && SESSION.role==="admin") ? "director" : "otro";
+        src += (src.indexOf("?")>=0?"&":"?") + "rol=" + encodeURIComponent(rol);
+      }
+      if(f.getAttribute("src")!==src) f.src = src;
+    };
+    if(DiagTools.loaded) go(); else DiagTools.ensure().then(go, go);
   },
   resetToolFrames(){
     ["turnosFrame","rechazosFrame","informeFrame","proyeccionFrame"].forEach(id=>{
