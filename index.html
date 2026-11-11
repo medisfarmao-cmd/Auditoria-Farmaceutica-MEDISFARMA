@@ -1970,6 +1970,181 @@ const DiagTools = {
     }
   }
 };
+
+/* Sincronización de puntos con el diagnóstico: nombres estándar + supervisor. Nunca borra puntos ni toca ids. */
+const PointsSync = {
+  plan:null,
+  N(t){ return String(t==null?"":t).normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim(); },
+  tok(t){ return this.N(t).split(" ").filter(Boolean).sort().join(" "); },
+  titulo(t){ return String(t).toLowerCase().replace(/(^|\s)\S/g,m=>m.toUpperCase()); },
+  async preview(){
+    if(typeof XLSX==="undefined"){ alert("No se pudo cargar el lector de Excel (se requiere conexión a internet)."); return; }
+    const input = document.getElementById("syncPtsFile"), file = input && input.files[0];
+    if(!file){ alert("Selecciona primero el archivo .xlsx del diagnóstico (MM-GO-FO-019)."); return; }
+    try{
+      const wb = XLSX.read(await file.arrayBuffer(), {type:"array"});
+      const ws = wb.Sheets["DIRECTORIO"] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, range:3, defval:""});
+      const C = DIAGNOSTICO_COL, porCod = new Map();
+      rows.forEach(r=>{
+        const raw = String(r[C.bodega]||"").trim(); if(!raw || this.N(raw)==="N/A") return;
+        const est = this.N(r[C.estado]), dep = this.N(r[C.departamento]);
+        if(est==="CERRADA" || dep==="AAA" || dep==="VIRTUAL") return;
+        porCod.set(this.N(raw), r);
+      });
+      if(!porCod.size){ alert("No se encontraron puntos válidos en el archivo. Verifica que sea el diagnóstico MM-GO-FO-019 (hoja DIRECTORIO)."); return; }
+      const ptByCod = new Map();
+      DB.puntos.forEach(p=>{ const k=this.N(p.codigo); if(k && !ptByCod.has(k)) ptByCod.set(k,p); });
+      // --- Homologación de supervisores de la app contra los del diagnóstico ---
+      const supDeFila = r=>String(r[C.supervisor]||"").split(/\n/)[0].replace(/[\d\s]{7,}$/,"").trim();
+      const diagSups = new Map();
+      porCod.forEach(r=>{ const n=supDeFila(r); if(n) diagSups.set(this.tok(n), n); });
+      const homol = [], usadoD = new Set(), mapaD = new Map();
+      DB.supervisores.forEach(sv=>{ const t=this.tok(sv.nombre); if(diagSups.has(t) && !mapaD.has(t)){ mapaD.set(t,sv); usadoD.add(t); homol.push({sup:sv,tipo:"exacto",diag:diagSups.get(t),aplicar:false}); } });
+      DB.supervisores.forEach(sv=>{
+        if(homol.some(h=>h.sup===sv)) return;
+        const ts = this.N(sv.nombre).split(" ").filter(Boolean);
+        const cands = [...diagSups.entries()].filter(([t,n])=>{
+          if(usadoD.has(t)) return false;
+          const td = this.N(n).split(" ").filter(Boolean), c = td.filter(x=>ts.includes(x)).length;
+          return c>=2 && (c===td.length || c===ts.length);
+        });
+        if(cands.length===1){ const [t,n]=cands[0]; mapaD.set(t,sv); usadoD.add(t); homol.push({sup:sv,tipo:"aprox",diag:n,aplicar:true}); }
+        else homol.push({sup:sv,tipo:"sin",diag:"",aplicar:false});
+      });
+      const nuevosSup = new Map(); // tok -> {nombre, cel}
+      const plan = [];
+      porCod.forEach((r, rawKey)=>{
+        const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(rawKey);
+        const nameCode = (m ? m[1] : rawKey).trim(), bodega = (m ? m[2] : rawKey).trim();
+        const nombreNuevo = "DROGUERIA MEDISFARMA " + nameCode;
+        let p = ptByCod.get(bodega) || ptByCod.get(nameCode) || ptByCod.get(rawKey) || null;
+        const supCell = String(r[C.supervisor]||"").split(/\n/);
+        const supNombre = supCell[0].replace(/[\d\s]{7,}$/,"").trim();
+        const supCel = (supCell.slice(1).join(" ").match(/[\d\s]{7,}/)||[""])[0].replace(/\s+/g,"");
+        let sup = supNombre ? (mapaD.get(this.tok(supNombre))||null) : null, supNuevo = false;
+        if(supNombre && !sup){ supNuevo = true; if(!nuevosSup.has(this.tok(supNombre))) nuevosSup.set(this.tok(supNombre), {nombre:this.titulo(supNombre), cel:supCel}); }
+        const e = {rawKey, bodega, nombreNuevo, estado:String(r[C.estado]||"").trim(), row:r, punto:p, supNombre, sup, supNuevo, cambios:[]};
+        if(p){
+          if((p.nombre||"")!==nombreNuevo) e.cambios.push("nombre");
+          if(this.N(p.codigo)!==bodega) e.cambios.push("código");
+          if(supNombre && (!sup || p.supervisorId!==sup.id)) e.cambios.push("supervisor");
+        }
+        plan.push(e);
+      });
+      plan.sort((a,b)=>a.nombreNuevo.localeCompare(b.nombreNuevo,"es",{numeric:true}));
+      homol.forEach(h=>{
+        const mios = DB.puntos.filter(pp=>pp.supervisorId===h.sup.id);
+        h.nPuntos = mios.length; h.destinos = {}; h.sinDiag = 0;
+        mios.forEach(pp=>{ const e = plan.find(x=>x.punto===pp); if(e && e.supNombre){ const k=e.sup?e.sup.nombre:this.titulo(e.supNombre); h.destinos[k]=(h.destinos[k]||0)+1; } else h.sinDiag++; });
+      });
+      this.plan = {plan, nuevosSup, homol, file:file.name};
+      this.render();
+    }catch(err){ console.error(err); alert("No se pudo leer el archivo. Verifica que sea el .xlsx del diagnóstico MM-GO-FO-019."); }
+  },
+  stats(){
+    const pl = this.plan.plan;
+    const nuevos = pl.filter(e=>!e.punto).length;
+    const act = pl.filter(e=>e.punto && e.cambios.length).length;
+    const igual = pl.filter(e=>e.punto && !e.cambios.length).length;
+    const ids = new Set(pl.filter(e=>e.punto && e.cambios.length).map(e=>e.punto.id));
+    const hzAf = DB.hallazgos.filter(h=>ids.has(h.pointId)).length;
+    const enApp = DB.puntos.filter(p=>!pl.some(e=>e.punto===p)).length;
+    return {nuevos, act, igual, hzAf, enApp, sups:this.plan.nuevosSup.size};
+  },
+  render(){
+    const box = document.getElementById("syncPtsPreview"); if(!box || !this.plan) return;
+    const st = this.stats(), pl = this.plan.plan;
+    box.innerHTML = `
+      <div class="kpi-row" style="margin-top:10px;">
+        <div class="kpi-card"><div class="kpi-num">${pl.length}</div><div class="kpi-lbl">Puntos en el diagnóstico (válidos)</div></div>
+        <div class="kpi-card"><div class="kpi-num">${st.act}</div><div class="kpi-lbl">Se actualizan</div></div>
+        <div class="kpi-card"><div class="kpi-num">${st.nuevos}</div><div class="kpi-lbl">Se crean</div></div>
+        <div class="kpi-card"><div class="kpi-num">${st.sups}</div><div class="kpi-lbl">Supervisores nuevos</div></div>
+        <div class="kpi-card"><div class="kpi-num">${st.hzAf}</div><div class="kpi-lbl">Hallazgos que se conservan (nombre/supervisor al día)</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);">${st.igual} ya están correctos. ${st.enApp} punto(s) de la app que no figuran en este diagnóstico quedan intactos.${st.sups?` Supervisores a crear (sin PIN ni identificación, complétalos en Director → Supervisores): <b>${[...this.plan.nuevosSup.values()].map(x=>esc(x.nombre)).join(", ")}</b>.`:""}</p>
+      <h5 style="margin:14px 0 6px;">Homologación de supervisores</h5>
+      <div class="table-wrap"><table class="datatable">
+        <thead><tr><th>Supervisor en la app</th><th>Resultado</th><th>Supervisor del diagnóstico</th><th>Puntos hoy</th><th>Qué pasa con sus puntos</th></tr></thead>
+        <tbody>${this.plan.homol.map((h,i)=>{
+          const dest = Object.entries(h.destinos).map(([k,v])=>esc(k)+" ("+v+")").join(", ");
+          const res = h.tipo==="exacto" ? "✓ Coincide" : h.tipo==="aprox" ? `≈ Parecido <label style="font-size:11px;"><input type="checkbox" ${h.aplicar?"checked":""} onchange="PointsSync.plan.homol[${i}].aplicar=this.checked"> renombrar</label>` : "⚠️ Sin coincidencia";
+          const que = h.tipo==="sin" ? (h.nPuntos? (dest?`Se reasignan a: ${dest}`:"")+(h.sinDiag?`${dest?"; ":""}${h.sinDiag} punto(s) no están en el diagnóstico y quedan con él`:"") : "Sin puntos asignados") : (h.nPuntos?"Conserva sus puntos":"Sin puntos asignados");
+          return `<tr><td>${esc(h.sup.nombre)}</td><td>${res}</td><td>${esc(h.diag||"—")}</td><td>${h.nPuntos}</td><td style="font-size:12px;">${que}</td></tr>`;
+        }).join("")}</tbody></table></div>
+      <h5 style="margin:14px 0 6px;">Detalle por punto</h5>
+      <div class="table-wrap" style="max-height:420px;overflow:auto;"><table class="datatable">
+        <thead><tr><th>Bodega</th><th>Acción</th><th>Nombre anterior</th><th>Nombre nuevo</th><th>Supervisor anterior</th><th>Supervisor nuevo</th><th>Cambios</th></tr></thead>
+        <tbody>${pl.map(e=>{
+          const ant = e.punto ? e.punto.nombre : "—";
+          const supAnt = e.punto ? (supervisorNombre(e.punto.supervisorId)||"(sin supervisor)") : "—";
+          const acc = !e.punto ? "➕ Crear" : e.cambios.length ? "✏️ Actualizar" : "✓ Sin cambios";
+          return `<tr><td>${esc(e.bodega)}</td><td>${acc}</td><td>${esc(ant)}</td><td>${esc(e.nombreNuevo)}</td><td>${esc(supAnt)}</td><td>${esc(e.supNombre||"—")}${e.supNuevo?" 🆕":""}</td><td style="font-size:11px;">${esc(e.cambios.join(", "))}</td></tr>`;
+        }).join("")}</tbody></table></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="PointsSync.apply()">✅ Aplicar cambios</button>
+        <button class="btn btn-ghost" onclick="PointsSync.csv()">⬇ Descargar vista previa (CSV)</button>
+        <button class="btn btn-ghost" onclick="PointsSync.cancel()">Cancelar</button>
+      </div>`;
+  },
+  cancel(){ this.plan=null; const b=document.getElementById("syncPtsPreview"); if(b) b.innerHTML=""; },
+  csv(){
+    if(!this.plan) return;
+    const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    const L=[["Bodega","Acción","Nombre anterior","Nombre nuevo","Supervisor anterior","Supervisor nuevo","Cambios"].map(q).join(";")];
+    this.plan.plan.forEach(e=>L.push([e.bodega,!e.punto?"Crear":e.cambios.length?"Actualizar":"Sin cambios",e.punto?e.punto.nombre:"",e.nombreNuevo,e.punto?supervisorNombre(e.punto.supervisorId):"",e.supNombre,e.cambios.join(", ")].map(q).join(";")));
+    this.descargar("vista_previa_sincronizacion_puntos.csv","﻿"+L.join("\n"),"text/csv;charset=utf-8");
+  },
+  descargar(nombre, texto, tipo){
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([texto],{type:tipo})); a.download=nombre; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+  },
+  async apply(){
+    if(!this.plan) return;
+    const st = this.stats();
+    if(!confirm(`Se actualizarán ${st.act} punto(s) y se crearán ${st.nuevos} (y ${st.sups} supervisor(es)). Los hallazgos se conservan. Se descargará un respaldo antes de guardar. ¿Aplicar?`)) return;
+    const C = DIAGNOSTICO_COL;
+    // respaldo previo
+    this.descargar("respaldo_puntos_"+new Date().toISOString().slice(0,10)+".json", JSON.stringify({fecha:new Date().toISOString(), puntos:DB.puntos, supervisores:DB.supervisores, hallazgos:DB.hallazgos}), "application/json");
+    // supervisores nuevos
+    const supNew = new Map();
+    this.plan.nuevosSup.forEach((v,k)=>{ const sv=blankSupervisor(); sv.nombre=v.nombre; sv.celularCorporativo=v.cel||""; DB.supervisores.push(sv); supNew.set(k,sv); });
+    let renombrados = 0;
+    this.plan.homol.forEach(h=>{ if(h.tipo==="aprox" && h.aplicar){ h.sup.nombre = this.titulo(h.diag); renombrados++; } });
+    const supDe = e=> e.sup || supNew.get(this.tok(e.supNombre)) || null;
+    const fill = (p,f,raw)=>{ const v = typeof raw==="string" ? raw.trim() : cellToPhoneStr(raw); if(v && (!p[f] || !String(p[f]).trim())) p[f]=v; };
+    const tocados = new Map(); // pointId -> punto
+    this.plan.plan.forEach(e=>{
+      const r = e.row; let p = e.punto;
+      if(!p){ p = blankPoint(); p.codigo = e.bodega; DB.puntos.push(p); }
+      p.nombre = e.nombreNuevo;
+      if(this.N(p.codigo)!==e.bodega) p.codigo = e.bodega;
+      const sv = supDe(e); if(sv) p.supervisorId = sv.id;
+      fill(p,"departamento",String(r[C.departamento]||"")); fill(p,"ciudad",String(r[C.municipio]||""));
+      fill(p,"direccion",String(r[C.direccion]||"")); fill(p,"celularCorporativo",r[C.celularCorporativo]);
+      fill(p,"celularDirectorTecnico",r[C.celularPersonal]); fill(p,"correoCorporativo",String(r[C.correo]||"")); fill(p,"horarioAtencion",String(r[C.horario]||""));
+      if(!(p.lat&&p.lng&&String(p.lat).trim()&&String(p.lng).trim())){ const ll=parseLatLngDiagnostico(r[C.latlng]); if(ll){ p.lat=ll.lat; p.lng=ll.lng; } }
+      tocados.set(p.id,p);
+    });
+    // hallazgos: mismo registro, solo se alinean nombre del punto y supervisor
+    let hzCambiados = 0;
+    DB.hallazgos.forEach(h=>{
+      const p = tocados.get(h.pointId); if(!p) return;
+      let ch=false;
+      if(h.puntoNombre!==p.nombre){ h.puntoNombre=p.nombre; ch=true; }
+      if(p.supervisorId && h.supervisorId!==p.supervisorId){ h.supervisorId=p.supervisorId; ch=true; }
+      if(ch) hzCambiados++;
+    });
+    const r1 = await saveMaster(MASTER_KEYS.puntos, DB.puntos);
+    const r2 = (supNew.size||renombrados) ? await saveMaster(MASTER_KEYS.supervisores, DB.supervisores) : true;
+    const r3 = hzCambiados ? await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos) : true;
+    this.plan = null;
+    document.getElementById("syncPtsPreview").innerHTML = "";
+    const f = document.getElementById("syncPtsFile"); if(f) f.value="";
+    renderDirectorPuntos();
+    alert((r1&&r2&&r3 ? "Listo. " : "ATENCIÓN: algún guardado en la nube falló; revisa tu conexión y repite la sincronización (no se perdió nada). ")+`Puntos actualizados: ${st.act}, creados: ${st.nuevos}, supervisores nuevos: ${st.sups}, homologados por nombre: ${renombrados}. Hallazgos alineados: ${hzCambiados} (ninguno eliminado).`);
+  }
+};
 const PointsDiagnostico = {
   async upload(){
     if(typeof XLSX === "undefined"){ alert("No se pudo cargar el lector de Excel (se requiere conexión a internet)."); return; }
@@ -6974,6 +7149,15 @@ function renderDirectorPuntosBase(){
         <label class="f">Archivo con los puntos<input type="file" id="bulkPointsFileInput" accept=".xlsx,.xls"></label>
         <button class="btn btn-primary btn-sm" onclick="PointsBulk.upload()">⬆ Subir y crear puntos</button>
       </div>
+    </div>
+    <div class="panel" style="border-color:var(--teal-700,#0f766e);">
+      <h4 style="margin-top:0;">🔄 Sincronizar puntos con el diagnóstico (nombres, supervisores)</h4>
+      <p style="font-size:12px;">Cruza por código de bodega, estandariza el nombre a «DROGUERIA MEDISFARMA &lt;código&gt;» y asigna el supervisor del diagnóstico. No se tienen en cuenta puntos CERRADA ni departamentos AAA / VIRTUAL. Los puntos se actualizan en el mismo registro: <b>no se pierden hallazgos, actas ni documentos</b>. Primero verás la vista previa y decides si aplicar.</p>
+      <div class="inline-form">
+        <label class="f">Archivo de diagnóstico<input type="file" id="syncPtsFile" accept=".xlsx,.xls"></label>
+        <button class="btn btn-primary btn-sm" onclick="PointsSync.preview()">🔍 Ver vista previa de cambios</button>
+      </div>
+      <div id="syncPtsPreview"></div>
     </div>
     <div class="panel" style="border-color:var(--teal-700,#0f766e);">
       <h4 style="margin-top:0;">🔗 Diagnóstico para las herramientas (Turnos, Rechazos/No facturables, Informe de dispensación)</h4>
