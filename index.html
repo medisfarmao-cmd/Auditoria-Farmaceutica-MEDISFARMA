@@ -1977,6 +1977,109 @@ const DiagTools = {
   }
 };
 
+
+/* Reparación de duplicados: conserva los registros antiguos y traslada referencias. */
+const PointsRepair = {
+  plan:null,
+  N(t){ return String(t==null?"":t).normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim(); },
+  key(code){
+    const c = this.N(code).replace(/[^A-Z0-9]/g,""); const m = /^([A-Z]*?)0*(\d+)$/.exec(c); if(!m) return c;
+    return (m[1]==="M"||m[1]==="N"||m[1]===""?"MN":m[1]) + m[2];
+  },
+  cityEq(a,b){ // BOGOTA == BOGOTA D.C.; vacío coincide con cualquiera
+    const f=t=>this.N(t).replace(/\bD\.?\s?C\.?$/,"").replace(/[^A-Z0-9]/g,""); const x=f(a), y=f(b);
+    return !x || !y || x===y || (Math.min(x.length,y.length)>=5 && (x.startsWith(y)||y.startsWith(x)));
+  },
+  lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
+    for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; },
+  simil(a,b){ // mismo primer nombre y los demás tokens iguales o casi iguales (Mesa/Meza, Ledesma/Ledezma)
+    const A=this.N(a).split(" ").filter(Boolean), B=this.N(b).split(" ").filter(Boolean); if(A.length<2||B.length<2) return this.N(a)===this.N(b);
+    const [S,L]=A.length<=B.length?[A,B]:[B,A]; if(S[0]!==L[0]) return false;
+    return S.every(t=>L.some(u=>t===u || (t.length>=4 && u.length>=4 && this.lev(t,u)<=(Math.max(t.length,u.length)>=6?2:1))));
+  },
+  REF_COLS:["visitas","hallazgos","hallazgosEliminados","documentos","instrumentos","lecturas","solicitudes","limpieza","equipos","activos"],
+  refs(tipo, id, mutarA){ // cuenta (o reasigna si mutarA) referencias; devuelve {n, cols:Set, audits:[]}
+    const out = {n:0, cols:new Set(), audits:[]}; const hit=(o,f,col)=>{ if(o && o[f]===id){ out.n++; if(mutarA){ o[f]=mutarA; } if(col) out.cols.add(col); return true; } return false; };
+    this.REF_COLS.forEach(col=>{ (Array.isArray(DB[col])?DB[col]:[]).forEach(it=>{ if(tipo==="punto"){ hit(it,"pointId",col); hit(it,"puntoId",col); } else hit(it,"supervisorId",col); }); });
+    if(tipo==="sup"){ DB.puntos.forEach(pp=>hit(pp,"supervisorId","puntos")); DB.notificaciones.forEach(n=>hit(n,"forSupervisorId","notificaciones")); }
+    (DB.audits||[]).forEach(a=>{ if(a&&a.header){ const h=a.header; if(tipo==="punto"? hit(h,"puntoId") : hit(h,"supervisorId")) out.audits.push(a); } });
+    return out;
+  },
+  pesoPunto(pp){
+    const campos = ["tipoEstablecimiento","direccion","lat","habilitacion","fechaHabilitacion","matriculaMercantil","areaLocal","numeroUsuariosAsignados","contratoQueAtiende","horarioAtencion","celularCorporativo","correoCorporativo","celularDirectorTecnico","casillasAtencion","pin"];
+    return this.refs("punto",pp.id).n*1000 + campos.filter(f=>pp[f]&&String(pp[f]).trim()).length*10 + ((pp.pinPersonalizado)?5:0);
+  },
+  pesoSup(sv){
+    const campos = ["identificacion","celularPersonal","correoCorporativo","correoPersonal","oficinaAtencion","pin"];
+    return campos.filter(f=>sv[f]&&String(sv[f]).trim()).length*10 + (sv.pinPersonalizado?5:0);
+  },
+  preview(){
+    const sups = [];
+    const usados = new Set();
+    DB.supervisores.forEach((a,i)=>{ DB.supervisores.forEach((b,j)=>{
+      if(j<=i || usados.has(a.id) || usados.has(b.id)) return;
+      if(this.simil(a.nombre,b.nombre)){
+        const [keep,dup] = this.pesoSup(a)>=this.pesoSup(b) ? [a,b] : [b,a];
+        usados.add(a.id); usados.add(b.id);
+        sups.push({keep, dup, nPuntos:DB.puntos.filter(pp=>pp.supervisorId===dup.id).length, nRefs:this.refs("sup",dup.id).n});
+      }
+    }); });
+    const grupos = new Map();
+    DB.puntos.forEach(pp=>{ const k=this.key(pp.codigo); if(!k) return; (grupos.get(k)||grupos.set(k,[]).get(k)).push(pp); });
+    const pts = [];
+    grupos.forEach(arr=>{
+      if(arr.length<2) return;
+      // subgrupos por ciudad (sin ciudad se agrupa con quien coincida)
+      const cs = []; arr.forEach(pp=>{ const c=this.N(pp.ciudad); let g=cs.find(x=>this.cityEq(c,x.c)); if(!g){ g={c,l:[]}; cs.push(g);} if(!g.c) g.c=c; g.l.push(pp); });
+      cs.forEach(g=>{ if(g.l.length<2) return;
+        const w = g.l.map(pp=>({pp,w:this.pesoPunto(pp)})).sort((x,y)=>y.w-x.w || String(x.pp.id).localeCompare(String(y.pp.id)));
+        pts.push({keep:w[0].pp, dups:w.slice(1).map(x=>({pp:x.pp, nRefs:this.refs("punto",x.pp.id).n}))});
+      });
+    });
+    this.plan = {sups, pts}; this.render();
+  },
+  render(){
+    const box=document.getElementById("repairPreview"); if(!box) return; const {sups,pts}=this.plan;
+    if(!sups.length && !pts.length){ box.innerHTML=`<p style="font-size:13px;margin-top:10px;">✅ No se encontraron duplicados.</p>`; return; }
+    box.innerHTML = `
+      <div class="kpi-row" style="margin-top:10px;"><div class="kpi-card"><div class="kpi-num">${sups.length}</div><div class="kpi-lbl">Supervisores repetidos</div></div>
+      <div class="kpi-card"><div class="kpi-num">${pts.reduce((n,g)=>n+g.dups.length,0)}</div><div class="kpi-lbl">Puntos repetidos</div></div></div>
+      ${sups.length?`<h5 style="margin:12px 0 6px;">Supervisores</h5><div class="table-wrap"><table class="datatable"><thead><tr><th>Se conserva (antiguo)</th><th>Se fusiona y elimina</th><th>Puntos a trasladar</th><th>Otras referencias</th></tr></thead><tbody>${sups.map(x=>`<tr><td>${esc(x.keep.nombre)}</td><td>${esc(x.dup.nombre)}</td><td>${x.nPuntos}</td><td>${x.nRefs-x.nPuntos}</td></tr>`).join("")}</tbody></table></div>`:""}
+      ${pts.length?`<h5 style="margin:12px 0 6px;">Puntos</h5><div class="table-wrap" style="max-height:380px;overflow:auto;"><table class="datatable"><thead><tr><th>Se conserva</th><th>Municipio</th><th>Se fusiona y elimina</th><th>Referencias que se trasladan</th></tr></thead><tbody>${pts.map(g=>g.dups.map(d=>`<tr><td>${esc(g.keep.codigo)} · ${esc(g.keep.nombre)}</td><td>${esc(g.keep.ciudad||"")}</td><td>${esc(d.pp.codigo)} · ${esc(d.pp.nombre)}</td><td>${d.nRefs}</td></tr>`).join("")).join("")}</tbody></table></div>`:""}
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" onclick="PointsRepair.apply()">✅ Aplicar reparación</button><button class="btn btn-ghost" onclick="PointsRepair.cancel()">Cancelar</button></div>`;
+  },
+  cancel(){ this.plan=null; const b=document.getElementById("repairPreview"); if(b) b.innerHTML=""; },
+  async apply(){
+    if(!this.plan) return; const {sups,pts}=this.plan;
+    if(!confirm(`Se fusionarán ${sups.length} supervisor(es) y ${pts.reduce((n,g)=>n+g.dups.length,0)} punto(s) repetidos, conservando los antiguos y trasladando sus referencias. Se descargará un respaldo. ¿Continuar?`)) return;
+    try{ await refreshAuditsFromStorage({force:true}); }catch(_){}
+    PointsSync.descargar("respaldo_antes_de_reparar_"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(DB), "application/json");
+    const cols = new Set(["puntos","supervisores"]); const audits = new Map();
+    const guardar = r=>{ r.cols.forEach(c=>cols.add(c)); r.audits.forEach(a=>audits.set(a.id,a)); };
+    sups.forEach(({keep,dup})=>{
+      guardar(this.refs("sup",dup.id,keep.id));
+      keep.nombreDiagnostico = this.N(dup.nombre);
+      ["celularCorporativo","celularPersonal","correoCorporativo","correoPersonal","oficinaAtencion","identificacion","pin"].forEach(f=>{ if(!keep[f] && dup[f]) keep[f]=dup[f]; });
+      DB.supervisores = DB.supervisores.filter(x=>x.id!==dup.id);
+    });
+    const borrar = new Set();
+    pts.forEach(({keep,dups})=>{ dups.forEach(({pp:d})=>{
+      guardar(this.refs("punto",d.id,keep.id));
+      Object.keys(d).forEach(f=>{ if(["id","codigo","nombre","pin","pinPersonalizado","supervisorId","colaboradores"].includes(f)) return; if((keep[f]===undefined||keep[f]===""||keep[f]===null) && d[f]!==undefined && d[f]!=="" && d[f]!==null) keep[f]=d[f]; });
+      if(!keep.supervisorId && d.supervisorId) keep.supervisorId = d.supervisorId;
+      if(/[^A-Za-z0-9]/.test(keep.codigo||"") && d.codigo) keep.codigo = d.codigo; // p.ej. "N.40" -> "N40"
+      borrar.add(d.id);
+    }); });
+    DB.puntos = DB.puntos.filter(x=>!borrar.has(x.id));
+    let ok = true;
+    for(const c of cols){ const mk = MASTER_KEYS[c]; if(mk){ const r = await saveMaster(mk, DB[c]); ok = ok && r; } }
+    for(const a of audits.values()){ const r = await saveAudit(a); ok = ok && r; }
+    this.plan=null; document.getElementById("repairPreview").innerHTML="";
+    renderDirectorPuntos();
+    alert((ok?"Listo. ":"ATENCIÓN: algún guardado en la nube falló; repite el proceso. ")+`Supervisores fusionados: ${sups.length}. Puntos fusionados: ${borrar.size}. Los registros antiguos se conservaron con sus hallazgos y referencias.`);
+  }
+};
+
 /* Sincronización de puntos con el diagnóstico: nombres estándar + supervisor. Nunca borra puntos ni toca ids. */
 const PointsSync = {
   plan:null,
@@ -2006,15 +2109,10 @@ const PointsSync = {
       const diagSups = new Map();
       porCod.forEach(r=>{ const n=supDeFila(r); if(n) diagSups.set(this.tok(n), n); });
       const homol = [], usadoD = new Set(), mapaD = new Map();
-      DB.supervisores.forEach(sv=>{ const t=this.tok(sv.nombre); if(diagSups.has(t) && !mapaD.has(t)){ mapaD.set(t,sv); usadoD.add(t); homol.push({sup:sv,tipo:"exacto",diag:diagSups.get(t),aplicar:false}); } });
+      DB.supervisores.forEach(sv=>{ const t=[this.tok(sv.nombre), sv.nombreDiagnostico?this.tok(sv.nombreDiagnostico):""].find(k=>k && diagSups.has(k) && !mapaD.has(k)); if(t){ mapaD.set(t,sv); usadoD.add(t); homol.push({sup:sv,tipo:"exacto",diag:diagSups.get(t),aplicar:false}); } });
       DB.supervisores.forEach(sv=>{
         if(homol.some(h=>h.sup===sv)) return;
-        const ts = this.N(sv.nombre).split(" ").filter(Boolean);
-        const cands = [...diagSups.entries()].filter(([t,n])=>{
-          if(usadoD.has(t)) return false;
-          const td = this.N(n).split(" ").filter(Boolean), c = td.filter(x=>ts.includes(x)).length;
-          return c>=2 && (c===td.length || c===ts.length);
-        });
+        const cands = [...diagSups.entries()].filter(([t,n])=>!usadoD.has(t) && PointsRepair.simil(sv.nombre,n));
         if(cands.length===1){ const [t,n]=cands[0]; mapaD.set(t,sv); usadoD.add(t); homol.push({sup:sv,tipo:"aprox",diag:n,aplicar:true}); }
         else homol.push({sup:sv,tipo:"sin",diag:"",aplicar:false});
       });
@@ -2023,8 +2121,15 @@ const PointsSync = {
       porCod.forEach((r, rawKey)=>{
         const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(rawKey);
         const nameCode = (m ? m[1] : rawKey).trim(), bodega = (m ? m[2] : rawKey).trim();
-        const nombreNuevo = "DROGUERIA MEDISFARMA " + nameCode;
+        const mn = /^[MN]\.?\s*0*(\d+)$/.exec(nameCode);
+        const nombreNuevo = "DROGUERIA MEDISFARMA " + (mn ? "N"+mn[1] : nameCode);
+        const munN = this.N(r[C.municipio]);
         let p = ptByCod.get(bodega) || ptByCod.get(nameCode) || ptByCod.get(rawKey) || null;
+        if(!p){ // mismo número en la familia M/N y mismo municipio (ej. N112 en la app = M112 en el diagnóstico)
+          const ks = [PointsRepair.key(bodega), PointsRepair.key(nameCode)];
+          const cand = DB.puntos.filter(pp=>ks.includes(PointsRepair.key(pp.codigo)) && PointsRepair.cityEq(pp.ciudad, r[C.municipio]));
+          if(cand.length) p = cand.sort((x,y)=>PointsRepair.pesoPunto(y)-PointsRepair.pesoPunto(x))[0];
+        }
         const supCell = String(r[C.supervisor]||"").split(/\n/);
         const supNombre = supCell[0].replace(/[\d\s]{7,}$/,"").trim();
         const supCel = (supCell.slice(1).join(" ").match(/[\d\s]{7,}/)||[""])[0].replace(/\s+/g,"");
@@ -2033,7 +2138,6 @@ const PointsSync = {
         const e = {rawKey, bodega, nombreNuevo, estado:String(r[C.estado]||"").trim(), row:r, punto:p, supNombre, sup, supNuevo, cambios:[]};
         if(p){
           if((p.nombre||"")!==nombreNuevo) e.cambios.push("nombre");
-          if(this.N(p.codigo)!==bodega) e.cambios.push("código");
           if(supNombre && (!sup || p.supervisorId!==sup.id)) e.cambios.push("supervisor");
         }
         plan.push(e);
@@ -2075,7 +2179,7 @@ const PointsSync = {
         <thead><tr><th>Supervisor en la app</th><th>Resultado</th><th>Supervisor del diagnóstico</th><th>Puntos hoy</th><th>Qué pasa con sus puntos</th></tr></thead>
         <tbody>${this.plan.homol.map((h,i)=>{
           const dest = Object.entries(h.destinos).map(([k,v])=>esc(k)+" ("+v+")").join(", ");
-          const res = h.tipo==="exacto" ? "✓ Coincide" : h.tipo==="aprox" ? `≈ Parecido <label style="font-size:11px;"><input type="checkbox" ${h.aplicar?"checked":""} onchange="PointsSync.plan.homol[${i}].aplicar=this.checked"> renombrar</label>` : "⚠️ Sin coincidencia";
+          const res = h.tipo==="exacto" ? "✓ Coincide" : h.tipo==="aprox" ? "≈ Parecido (se vincula; conserva su nombre)" : "⚠️ Sin coincidencia";
           const que = h.tipo==="sin" ? (h.nPuntos? (dest?`Se reasignan a: ${dest}`:"")+(h.sinDiag?`${dest?"; ":""}${h.sinDiag} punto(s) no están en el diagnóstico y quedan con él`:"") : "Sin puntos asignados") : (h.nPuntos?"Conserva sus puntos":"Sin puntos asignados");
           return `<tr><td>${esc(h.sup.nombre)}</td><td>${res}</td><td>${esc(h.diag||"—")}</td><td>${h.nPuntos}</td><td style="font-size:12px;">${que}</td></tr>`;
         }).join("")}</tbody></table></div>
@@ -2116,7 +2220,7 @@ const PointsSync = {
     const supNew = new Map();
     this.plan.nuevosSup.forEach((v,k)=>{ const sv=blankSupervisor(); sv.nombre=v.nombre; sv.celularCorporativo=v.cel||""; DB.supervisores.push(sv); supNew.set(k,sv); });
     let renombrados = 0;
-    this.plan.homol.forEach(h=>{ if(h.tipo==="aprox" && h.aplicar){ h.sup.nombre = this.titulo(h.diag); renombrados++; } });
+    this.plan.homol.forEach(h=>{ if(h.tipo==="aprox"){ h.sup.nombreDiagnostico = this.N(h.diag); renombrados++; } });
     const supDe = e=> e.sup || supNew.get(this.tok(e.supNombre)) || null;
     const fill = (p,f,raw)=>{ const v = typeof raw==="string" ? raw.trim() : cellToPhoneStr(raw); if(v && (!p[f] || !String(p[f]).trim())) p[f]=v; };
     const tocados = new Map(); // pointId -> punto
@@ -2124,7 +2228,6 @@ const PointsSync = {
       const r = e.row; let p = e.punto;
       if(!p){ p = blankPoint(); p.codigo = e.bodega; DB.puntos.push(p); }
       p.nombre = e.nombreNuevo;
-      if(this.N(p.codigo)!==e.bodega) p.codigo = e.bodega;
       const sv = supDe(e); if(sv) p.supervisorId = sv.id;
       fill(p,"departamento",String(r[C.departamento]||"")); fill(p,"ciudad",String(r[C.municipio]||""));
       fill(p,"direccion",String(r[C.direccion]||"")); fill(p,"celularCorporativo",r[C.celularCorporativo]);
@@ -2148,7 +2251,7 @@ const PointsSync = {
     document.getElementById("syncPtsPreview").innerHTML = "";
     const f = document.getElementById("syncPtsFile"); if(f) f.value="";
     renderDirectorPuntos();
-    alert((r1&&r2&&r3 ? "Listo. " : "ATENCIÓN: algún guardado en la nube falló; revisa tu conexión y repite la sincronización (no se perdió nada). ")+`Puntos actualizados: ${st.act}, creados: ${st.nuevos}, supervisores nuevos: ${st.sups}, homologados por nombre: ${renombrados}. Hallazgos alineados: ${hzCambiados} (ninguno eliminado).`);
+    alert((r1&&r2&&r3 ? "Listo. " : "ATENCIÓN: algún guardado en la nube falló; revisa tu conexión y repite la sincronización (no se perdió nada). ")+`Puntos actualizados: ${st.act}, creados: ${st.nuevos}, supervisores nuevos: ${st.sups}, vinculados por nombre: ${renombrados}. Hallazgos alineados: ${hzCambiados} (ninguno eliminado).`);
   }
 };
 const PointsDiagnostico = {
@@ -7160,6 +7263,12 @@ function renderDirectorPuntosBase(){
         <label class="f">Archivo con los puntos<input type="file" id="bulkPointsFileInput" accept=".xlsx,.xls"></label>
         <button class="btn btn-primary btn-sm" onclick="PointsBulk.upload()">⬆ Subir y crear puntos</button>
       </div>
+    </div>
+    <div class="panel" style="border-color:var(--amber-500,#d97706);">
+      <h4 style="margin-top:0;">🧹 Reparar duplicados (puntos y supervisores)</h4>
+      <p style="font-size:12px;">Detecta puntos repetidos (ej. N112 y M112 del mismo municipio) y supervisores repetidos (ej. «Sandra Milena Mesa Campo» y «Sandra Meza»). <b>Se conservan los registros antiguos</b> (los que tienen historial y datos) y se les trasladan los hallazgos, documentos, actas y demás referencias del duplicado; solo se elimina el registro repetido. Verás la vista previa antes de aplicar y se descarga un respaldo.</p>
+      <button class="btn btn-primary btn-sm" onclick="PointsRepair.preview()">🔍 Analizar duplicados</button>
+      <div id="repairPreview"></div>
     </div>
     <div class="panel" style="border-color:var(--teal-700,#0f766e);">
       <h4 style="margin-top:0;">🔄 Sincronizar puntos con el diagnóstico (nombres, supervisores)</h4>
