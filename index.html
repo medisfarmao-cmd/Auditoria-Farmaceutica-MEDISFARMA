@@ -713,6 +713,7 @@ canvas.sigpad{
       <div class="hidden" id="section-supervisores">
         <div class="subnav no-print">
           <button class="subtab active" data-sub="control" onclick="App.showSub('control')">Control de auditorías</button>
+          <button class="subtab hidden" id="subMisPuntosBtn" data-sub="mispuntos" onclick="App.showSub('mispuntos')">Mis puntos</button>
           <button class="subtab" data-sub="cronograma" onclick="App.showSub('cronograma')">Cronograma de visitas</button>
           <button class="subtab" data-sub="hallazgos" onclick="App.showSub('hallazgos')">Hallazgos</button>
           <button class="subtab" data-sub="documentos" onclick="App.showSub('documentos')">Documentos</button>
@@ -722,6 +723,7 @@ canvas.sigpad{
           <button class="subtab hidden" id="subMantenimientoBtn" data-sub="mantenimiento" onclick="App.showSub('mantenimiento')">Mantenimiento</button>
         </div>
         <div class="view" id="sub-control"></div>
+        <div class="view hidden" id="sub-mispuntos"></div>
         <div class="view hidden" id="sub-cronograma"></div>
         <div class="view hidden" id="sub-hallazgos"></div>
         <div class="view hidden" id="sub-documentos"></div>
@@ -1978,6 +1980,120 @@ const DiagTools = {
 };
 
 
+
+/* ---- Supervisor: "Mis puntos" (editar datos del punto y enviarlos a aprobación del administrador) ---- */
+function renderMisPuntos(onlyTable){
+  const el = document.getElementById("sub-mispuntos"); if(!el) return;
+  if(!(SESSION && SESSION.role==="supervisor")){ el.innerHTML = '<p style="color:var(--ink-soft);">Disponible solo para supervisores.</p>'; return; }
+  const q = (document.getElementById("misPuntosSearch")||{}).value || "";
+  const mine = DB.puntos.filter(p=>p.supervisorId===SESSION.id).sort((a,b)=>String(a.codigo).localeCompare(String(b.codigo),"es",{numeric:true}));
+  const sols = DB.solicitudes.filter(s=>s.supervisorId===SESSION.id && s.tipo!=="creacion");
+  const ult = id => sols.filter(s=>s.pointId===id).sort((a,b)=>(b.fechaSolicitud||"").localeCompare(a.fechaSolicitud||""))[0];
+  const ql = q.trim().toLowerCase();
+  const rows = mine.filter(p=>!ql || (p.nombre||"").toLowerCase().includes(ql) || (p.codigo||"").toLowerCase().includes(ql) || (p.ciudad||"").toLowerCase().includes(ql));
+  const pend = mine.filter(p=>{const u=ult(p.id); return u && u.estado==="Pendiente";}).length;
+  const tableHtml = `<div class="table-wrap"><table class="datatable">
+        <thead><tr><th>Bodega</th><th>Punto</th><th>Ciudad / Depto.</th><th>Tipo estab.</th><th>Solicitud de cambios</th><th></th></tr></thead>
+        <tbody>${rows.map(p=>{
+          const u = ult(p.id);
+          const est = !u ? "—" : u.estado==="Pendiente" ? '<span class="chip-mini chip-pendiente">Pendiente de aprobación</span>'
+            : u.estado==="Aprobado" ? '<span class="chip-mini chip-aprobado">Aprobada</span>'
+            : `<span class="chip-mini chip-rechazado">Rechazada</span>${u.comentarioAdmin?`<br><span style="font-size:11px;color:var(--ink-soft);">${esc(u.comentarioAdmin)}</span>`:""}`;
+          return `<tr><td><b>${esc(p.codigo)}</b></td><td>${esc(p.nombre)}<br><span style="font-size:11px;color:var(--ink-soft);">${esc(p.direccion)}</span></td>
+            <td>${esc(p.ciudad)}${p.departamento?", "+esc(p.departamento):""}</td><td>${esc(p.tipoEstablecimiento)}</td><td>${est}</td>
+            <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="Supervisores.openEditPoint('${p.id}','misPuntosEditWrap')">✏️ Editar información</button></td></tr>`;
+        }).join("") || '<tr><td colspan="6" style="color:var(--ink-soft);">No tienes puntos asignados'+(ql?' con ese filtro':'')+'.</td></tr>'}</tbody>
+      </table></div>`;
+  if(onlyTable){ const tt=document.getElementById("misPuntosTable"); if(tt){ tt.innerHTML=tableHtml; return; } }
+  el.innerHTML = `
+    <div class="panel">
+      <h3>📍 Mis puntos de dispensación</h3>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:0;">Aquí puedes corregir y completar la información de los puntos que tienes asignados. Los cambios se envían como solicitud y <strong>solo se aplican cuando el administrador los aprueba</strong>. La <strong>bodega (código)</strong> es el identificador único del punto y no se puede modificar.</p>
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-num">${mine.length}</div><div class="kpi-lbl">Puntos asignados</div></div>
+        <div class="kpi-card"><div class="kpi-num" style="color:${pend?'var(--amber)':'var(--ink)'};">${pend}</div><div class="kpi-lbl">Con cambios pendientes</div></div>
+      </div>
+    </div>
+    <div id="misPuntosEditWrap"></div>
+    <div class="panel">
+      <div class="filters-row"><input type="text" id="misPuntosSearch" value="${esc(q)}" placeholder="🔎 Buscar por bodega, nombre o ciudad…" oninput="renderMisPuntos(true)" style="min-width:260px;"></div>
+      <div id="misPuntosTable">${tableHtml}</div>
+    </div>`;
+  const sb = document.getElementById("misPuntosSearch"); if(sb && q){ sb.focus(); sb.setSelectionRange(q.length,q.length); }
+}
+
+
+/* Reportes de turnos (ERP) cargados por el Director y almacenados para que los supervisores consulten el histórico.
+   Cada reporte se guarda comprimido (gzip+base64) en trozos: master:turnos:<id>:<n>; el índice en master:turnos_idx.
+   El iframe de Turnos (mismo origen) lo usa como parent.TurnosStore. */
+const TurnosStore = {
+  IDX:"master:turnos_idx", CH:600000, cache:null, mem:{},
+  b64(u8){ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); },
+  unb64(t){ const b=atob(t), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; },
+  async zip(text){
+    if(typeof CompressionStream==="undefined") return {z:0, s:text};
+    const buf = await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    return {z:1, s:this.b64(new Uint8Array(buf))};
+  },
+  async unzip(str, z){
+    if(!z) return str;
+    return await new Response(new Blob([this.unb64(str)]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  },
+  async index(force){
+    if(this.cache && !force) return this.cache;
+    const v = await loadMaster(this.IDX, true);
+    this.cache = (v && Array.isArray(v.files)) ? v : {files:[]};
+    return this.cache;
+  },
+  async list(force){ const i = await this.index(force); return i.files.slice().sort((a,b)=>String(a.min).localeCompare(String(b.min))); },
+  async save(meta, text){ // meta {name,min,max,n,bad}
+    if(!hasStorage) return false;
+    const z = await this.zip(text), parts = [];
+    for(let i=0;i<z.s.length;i+=this.CH) parts.push(z.s.slice(i,i+this.CH));
+    const id = "t"+Date.now().toString(36);
+    for(let i=0;i<parts.length;i++){
+      if(!(await saveMaster(`master:turnos:${id}:${i}`, {z:z.z, i, s:parts[i]}))) { await this.dropChunks({id, chunks:i}); return false; }
+    }
+    const idx = await this.index(true);
+    const old = idx.files.filter(f=>f.name===meta.name);
+    idx.files = idx.files.filter(f=>f.name!==meta.name).concat({id, name:meta.name, min:meta.min, max:meta.max, n:meta.n, bad:meta.bad||0, chunks:parts.length, z:z.z, ts:new Date().toISOString(), by:(SESSION&&SESSION.nombre)||""});
+    if(!(await saveMaster(this.IDX, idx))){ await this.dropChunks({id, chunks:parts.length}); this.cache=null; return false; }
+    for(const o of old) await this.dropChunks(o);
+    this.mem[id] = text; this.renderStatus();
+    return id;
+  },
+  async dropChunks(f){
+    try{ for(let i=0;i<(f.chunks||0);i++) await supabaseClient.from("app_data").delete().eq("key", `master:turnos:${f.id}:${i}`); }catch(e){ console.warn("No se pudieron borrar trozos", e); }
+  },
+  async remove(id){
+    const idx = await this.index(true), f = idx.files.find(x=>x.id===id); if(!f) return true;
+    idx.files = idx.files.filter(x=>x.id!==id);
+    const ok = await saveMaster(this.IDX, idx); if(!ok) return false;
+    await this.dropChunks(f); delete this.mem[id]; this.renderStatus(); return true;
+  },
+  async load(f){ // devuelve el texto TSV del reporte
+    if(this.mem[f.id]) return this.mem[f.id];
+    let str = "";
+    for(let i=0;i<f.chunks;i++){ const c = await loadMaster(`master:turnos:${f.id}:${i}`, true); if(!c || typeof c.s!=="string") throw new Error("Faltan datos del reporte "+f.name); str += c.s; }
+    const t = await this.unzip(str, f.z); this.mem[f.id] = t; return t;
+  },
+  async renderStatus(){
+    const el = document.getElementById("turnosStoreStatus"); if(!el) return;
+    const l = await this.list();
+    if(!l.length){ el.innerHTML = "Aún no hay reportes de turnos guardados."; return; }
+    const d = x=>String(x||"").split("-").reverse().join("/");
+    el.innerHTML = `<b>Histórico: ${d(l[0].min)} – ${d(l[l.length-1].max)}</b><div class="table-wrap"><table class="datatable"><thead><tr><th>Reporte</th><th>Periodo</th><th>Turnos</th><th>Cargado</th><th></th></tr></thead><tbody>${l.map(f=>`<tr><td>${esc(f.name)}</td><td>${d(f.min)} – ${d(f.max)}</td><td>${Number(f.n||0).toLocaleString("es-CO")}</td><td>${f.ts?new Date(f.ts).toLocaleString("es-CO"):""}${f.by?" · "+esc(f.by):""}</td><td><button class="btn btn-danger btn-sm" onclick="TurnosStore.removeUI('${f.id}')">Quitar</button></td></tr>`).join("")}</tbody></table></div>`;
+  },
+  async removeUI(id){
+    if(!confirm("¿Quitar este reporte del histórico? Los supervisores dejarán de verlo.")) return;
+    const ok = await this.remove(id);
+    alert(ok ? "Reporte quitado." : "No se pudo quitar el reporte (revisa la conexión).");
+    ["turnosFrame"].forEach(i=>{ const f=document.getElementById(i); if(f) f.removeAttribute("src"); });
+  }
+};
+
+window.TurnosStore = TurnosStore;
+
 /* Reparación de duplicados: conserva los registros antiguos y traslada referencias. */
 const PointsRepair = {
   plan:null,
@@ -2581,11 +2697,11 @@ const PointsBulk = {
   }
 };
 
-function pointFormFieldsHtml(prefix, p, lockSupervisor){
+function pointFormFieldsHtml(prefix, p, lockSupervisor, lockCodigo){
   p = p || blankPoint();
   const col = p.colaboradores || {directorTecnico:0, auxiliarFarmacia:0, orientador:0, auxiliarAdministrativo:0, mensajeros:0};
   return `
-    <label class="f">Código<input type="text" id="${prefix}codigo" value="${esc(p.codigo)}" placeholder="Ej. M24"></label>
+    <label class="f">${lockCodigo?"Bodega / Código (único, no editable)":"Código"}<input type="text" id="${prefix}codigo" value="${esc(p.codigo)}" placeholder="Ej. M24" ${lockCodigo?'readonly tabindex="-1" style="background:#eef1f4;color:#555;cursor:not-allowed;font-weight:700;"':""}></label>
     <label class="f">Nombre del punto<input type="text" id="${prefix}nombre" value="${esc(p.nombre)}" placeholder="Nombre del punto"></label>
     <label class="f">Departamento<input type="text" id="${prefix}departamento" value="${esc(p.departamento)}"></label>
     <label class="f">Ciudad/Municipio<input type="text" id="${prefix}ciudad" value="${esc(p.ciudad)}"></label>
@@ -4948,18 +5064,20 @@ const Supervisores = {
     Supervisores.renderPointsTable();
     initOperativeMap();
   },
-  openEditPoint(id){
+  _ew: "pointEditPanelWrap",
+  openEditPoint(id, wrapId){
     const p = DB.puntos.find(x=>x.id===id);
     if(!p) return;
     const isAdmin = SESSION && SESSION.role==="admin";
-    const wrap = document.getElementById("pointEditPanelWrap");
+    this._ew = wrapId || "pointEditPanelWrap";
+    const wrap = document.getElementById(this._ew);
     if(!wrap) return;
     wrap.innerHTML = `
       <div class="panel" style="border-color:var(--teal-500);border-width:2px;">
         <h3>${isAdmin ? "Editar punto" : "Solicitar cambios de"}: ${esc(p.nombre)}</h3>
         ${!isAdmin ? `<p style="font-size:12px;color:var(--ink-soft);margin-top:0;">Estos cambios quedarán <strong>pendientes de aprobación del administrador</strong> y solo se aplicarán cuando los apruebe.</p>` : ""}
         <div class="inline-form">
-          ${pointFormFieldsHtml("ptedit_", p, !isAdmin)}
+          ${pointFormFieldsHtml("ptedit_", p, !isAdmin, !isAdmin)}
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="btn btn-ghost btn-sm" type="button" onclick="Supervisores.geocode('ptedit_direccion','ptedit_ciudad','ptedit_departamento','ptedit_lat','ptedit_lng')">📍 Ubicar dirección</button>
@@ -4972,7 +5090,7 @@ const Supervisores = {
     setTimeout(()=>initMiniMap("ptedit_", p.lat, p.lng), 50);
   },
   closeEditPanel(){
-    const wrap = document.getElementById("pointEditPanelWrap");
+    const wrap = document.getElementById(this._ew || "pointEditPanelWrap");
     if(wrap) wrap.innerHTML = "";
   },
   async savePointEdit(id){
@@ -4980,6 +5098,8 @@ const Supervisores = {
     if(!p) return;
     const isAdmin = SESSION && SESSION.role==="admin";
     const newVals = readPointFormValues("ptedit_");
+    if(!isAdmin){ newVals.codigo = p.codigo; newVals.supervisorId = p.supervisorId || ""; }
+    if(!newVals.nombre){ alert("El nombre del punto no puede quedar vacío."); return; }
     if(isAdmin){
       Object.assign(p, newVals);
       await saveMaster(MASTER_KEYS.puntos, DB.puntos);
@@ -4991,6 +5111,11 @@ const Supervisores = {
         alert("No hiciste ningún cambio en los datos del punto.");
         return;
       }
+      const previa = DB.solicitudes.filter(x=>x.pointId===p.id && x.estado==="Pendiente" && x.tipo!=="creacion");
+      if(previa.length){
+        if(!confirm("Este punto ya tiene una solicitud pendiente de aprobación. ¿Reemplazarla por estos cambios?")) return;
+        DB.solicitudes = DB.solicitudes.filter(x=>!previa.includes(x));
+      }
       const sol = blankSolicitud();
       sol.pointId = p.id;
       sol.supervisorId = SESSION.id;
@@ -4998,10 +5123,11 @@ const Supervisores = {
       sol.valoresAnteriores = anteriores;
       sol.fechaSolicitud = new Date().toISOString();
       DB.solicitudes.push(sol);
-      await saveMaster(MASTER_KEYS.solicitudes, DB.solicitudes);
+      const okSol = await saveMaster(MASTER_KEYS.solicitudes, DB.solicitudes);
       Supervisores.closeEditPanel();
-      alert("Tus cambios se enviaron para aprobación del administrador. Se aplicarán al punto una vez sean revisados.");
-      renderControl();
+      try{ await addNotificacion({mensaje:`El supervisor ${supervisorNombre(SESSION.id)} solicitó cambios en el punto ${p.nombre} (${p.codigo}): ${Object.keys(cambios).map(k=>POINT_FIELD_LABELS[k]||k).join(", ")}. Ve a revisar.`, forRole:"admin", accion:{tipo:"solicitudes"}, icono:"✏️"}); }catch(_){}
+      alert(okSol ? "Tus cambios se enviaron para aprobación del administrador. Se aplicarán al punto una vez sean revisados." : "No se pudo guardar la solicitud en la nube. Verifica tu conexión e inténtalo de nuevo.");
+      if(App.currentSub==="mispuntos") renderMisPuntos(); else renderControl();
     }
   },
   renderPointsTable(){
@@ -7248,6 +7374,7 @@ function renderMantenimientoGeneral(){
 function renderDirectorPuntos(){
   renderDirectorPuntosBase();
   DiagTools.renderStatus();
+  TurnosStore.renderStatus();
   if(!DiagTools.loaded) DiagTools.ensure();
 }
 function renderDirectorPuntosBase(){
@@ -7287,6 +7414,12 @@ function renderDirectorPuntosBase(){
         <label class="f">Archivo de diagnóstico<input type="file" id="diagToolsFileInput" accept=".xlsx,.xls"></label>
         <button class="btn btn-primary btn-sm" onclick="DiagTools.upload()">⬆ Cargar y aplicar a las herramientas</button>
       </div>
+    </div>
+    <div class="panel" style="border-color:var(--teal-700,#0f766e);">
+      <h4 style="margin-top:0;">📊 Reportes de turnos (ERP) para el análisis de turnos</h4>
+      <p style="font-size:12px;">Solo el Director carga el reporte de turnos. Cada reporte queda guardado en la nube y los supervisores lo consultan automáticamente (sin poder cargar ni borrar). Carga el de cada mes (puedes subir los últimos 3 meses para dar histórico); los días repetidos entre reportes no se duplican.</p>
+      <div id="turnosStoreStatus" style="font-size:12px;">Consultando reportes guardados…</div>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="App.showMain('turnos')">⬆ Ir a Turnos para cargar el reporte</button></div>
     </div>
     <div class="panel" style="border-color:var(--amber-500,#d97706);background:var(--amber-100,#fef3c7);">
       <h4 style="margin-top:0;">🛰️ Corregir y completar puntos desde el diagnóstico (MM-GO-FO-019)</h4>
@@ -8043,6 +8176,7 @@ const App = {
       document.getElementById("section-punto").classList.add("hidden");
       document.getElementById("navDirector").classList.toggle("hidden", SESSION.role!=="admin");
       document.getElementById("subMantenimientoBtn").classList.toggle("hidden", SESSION.role!=="admin");
+      document.getElementById("subMisPuntosBtn").classList.toggle("hidden", SESSION.role!=="supervisor");
       document.getElementById("notifPasswordTabBtn").classList.toggle("hidden", SESSION.role!=="supervisor");
       this.showMain("notificaciones");
     }
@@ -8078,6 +8212,12 @@ const App = {
       if(iframeId==="proyeccionFrame"){
         const rol = (SESSION && SESSION.role==="admin") ? "director" : "otro";
         src += (src.indexOf("?")>=0?"&":"?") + "rol=" + encodeURIComponent(rol);
+      }
+      if(iframeId==="turnosFrame"){
+        const isDir = SESSION && SESSION.role==="admin";
+        let sup = "";
+        if(SESSION && SESSION.role==="supervisor"){ const sv = DB.supervisores.find(x=>x.id===SESSION.id); sup = (sv && (sv.nombreDiagnostico||sv.nombre)) || SESSION.nombre || ""; }
+        src += (src.indexOf("?")>=0?"&":"?") + "rol=" + (isDir?"director":"otro") + "&uid=" + encodeURIComponent((SESSION&&(SESSION.id||SESSION.role))||"anon") + (sup?"&sup="+encodeURIComponent(sup):"");
       }
       if(f.getAttribute("src")!==src) f.src = src;
     };
@@ -8148,12 +8288,14 @@ const App = {
   },
   showSub(sub){
     if(sub==="mantenimiento" && !(SESSION && SESSION.role==="admin")) sub = "control";
+    if(sub==="mispuntos" && !(SESSION && SESSION.role==="supervisor")) sub = "control";
     this.currentSub = sub;
-    ["control","cronograma","hallazgos","documentos","temperatura","activos","mapapuntos","mantenimiento"].forEach(s=>{
+    ["control","mispuntos","cronograma","hallazgos","documentos","temperatura","activos","mapapuntos","mantenimiento"].forEach(s=>{
       document.getElementById("sub-"+s).classList.toggle("hidden", s!==sub);
     });
     document.querySelectorAll(".subtab").forEach(b=>b.classList.toggle("active", b.dataset.sub===sub));
     if(sub==="control") renderControl();
+    if(sub==="mispuntos") renderMisPuntos();
     if(sub==="cronograma") renderCronograma();
     if(sub==="hallazgos") renderHallazgos();
     if(sub==="documentos") renderDocumentos();
