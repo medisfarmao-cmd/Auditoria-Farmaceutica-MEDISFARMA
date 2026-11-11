@@ -1057,6 +1057,7 @@ function locationLinkHtml(loc){
   return `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener">${lat.toFixed(5)}, ${lng.toFixed(5)}</a>`;
 }
 
+const MAX_FOTOS_EXTRA = 14;
 function renderPhotoPanel(){
   const wrap = document.getElementById("photoPanelWrap");
   if(!wrap || !current) return;
@@ -1088,14 +1089,20 @@ function renderPhotoPanel(){
         </div>`;
       }).join("")}
     </div>
-    <div style="margin-top:12px;">
-      <button class="btn btn-ghost btn-sm" type="button" onclick="AuditPhotos.addExtraPrompt()">+ Agregar otra evidencia fotográfica</button>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <label class="btn btn-ghost btn-sm" style="margin:0;${current.fotosExtra.length>=MAX_FOTOS_EXTRA?"opacity:.5;pointer-events:none;":""}">📷 Agregar evidencia (cámara)
+        <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="AuditPhotos.addExtraFiles(this)">
+      </label>
+      <label class="btn btn-ghost btn-sm" style="margin:0;${current.fotosExtra.length>=MAX_FOTOS_EXTRA?"opacity:.5;pointer-events:none;":""}">🖼 Agregar desde galería (varias)
+        <input type="file" accept="image/*" multiple style="display:none;" onchange="AuditPhotos.addExtraFiles(this)">
+      </label>
+      <span style="font-size:12.5px;color:var(--ink-soft);">Evidencias adicionales: <strong>${current.fotosExtra.length}/${MAX_FOTOS_EXTRA}</strong></span>
     </div>
     ${current.fotosExtra.length>0 ? `
     <div class="photo-grid-form" style="margin-top:10px;">
       ${current.fotosExtra.map(f=>`
         <div class="photo-slot">
-          <div class="photo-slot-label">${esc(f.label)}</div>
+          <input type="text" class="photo-slot-label" value="${esc(f.label)}" placeholder="Descripción de la evidencia" onchange="AuditPhotos.renameExtra('${f.id}', this.value)" style="width:100%;font-weight:600;">
           <img src="${f.url || f.dataUri}" class="photo-slot-thumb">
           <div class="photo-slot-meta">${new Date(f.timestamp).toLocaleString("es-CO")}<br>${f.lat!==null && f.lat!==undefined ? `${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}` : "Sin GPS"}</div>
           <button class="btn btn-danger btn-sm" type="button" onclick="AuditPhotos.removeExtra('${f.id}')">Eliminar</button>
@@ -1140,37 +1147,36 @@ const AuditPhotos = {
       alert("No se pudo obtener la ubicación. Verifica que el navegador/dispositivo tenga el permiso de ubicación activado.");
     }
   },
-  addExtraPrompt(){
-    const label = prompt("Nombre o descripción corta de esta evidencia adicional:", "");
-    if(!label) return;
-    const inputEl = document.createElement("input");
-    inputEl.type = "file";
-    inputEl.accept = "image/*";
-    inputEl.capture = "environment";
-    inputEl.onchange = async ()=>{
-      const file = inputEl.files[0];
-      if(!file || !current) return;
-      ensurePhotoFields(current);
+  async addExtraFiles(inputEl){
+    const files = [...(inputEl.files||[])]; inputEl.value = "";
+    if(!files.length || !current) return;
+    ensurePhotoFields(current);
+    const libres = MAX_FOTOS_EXTRA - current.fotosExtra.length;
+    if(libres<=0){ alert(`Ya agregaste el máximo de ${MAX_FOTOS_EXTRA} evidencias adicionales.`); return; }
+    const usar = files.slice(0, libres);
+    if(files.length>libres) alert(`Solo se pueden agregar ${MAX_FOTOS_EXTRA} evidencias adicionales por acta: se tomarán las primeras ${libres}.`);
+    let geo = null;
+    try{ geo = await getGeolocationOnce(5000); }catch(e){ geo = null; }
+    const nuevas = [];
+    for(const file of usar){
       let dataUri;
       try{ dataUri = await compressImageFile(file, 1000, 0.65); }
-      catch(e){ alert("No se pudo procesar la foto."); return; }
-      const timestamp = new Date().toISOString();
-      let geo = null;
-      try{ geo = await getGeolocationOnce(6000); }catch(e){ geo = null; }
+      catch(e){ alert("No se pudo procesar una de las fotos."); continue; }
       const fotoId = uid("foto");
-      current.fotosExtra.push({ id: fotoId, label: label.trim(), dataUri, timestamp, lat: geo?geo.lat:null, lng: geo?geo.lng:null });
+      const f = { id: fotoId, label: "Evidencia adicional " + (current.fotosExtra.length+1), dataUri, timestamp: new Date().toISOString(), lat: geo?geo.lat:null, lng: geo?geo.lng:null };
+      current.fotosExtra.push(f); nuevas.push(f);
       renderPhotoPanel();
-      scheduleSave();
-      const keyPath = `auditorias/${current.id}/extra_${fotoId}.jpg`;
-      const url = await uploadToR2(dataUri, keyPath);
-      const f = current.fotosExtra.find(x=>x.id===fotoId);
-      if(url && f){
-        f.url = url;
-        delete f.dataUri;
-        scheduleSave();
-      }
-    };
-    inputEl.click();
+    }
+    scheduleSave(); // guarda ya con los dataUri; la subida a R2 reemplaza luego el peso en el acta
+    for(const f of nuevas){
+      const url = await uploadToR2(f.dataUri, `auditorias/${current.id}/extra_${f.id}.jpg`);
+      const cur = current && current.fotosExtra.find(x=>x.id===f.id);
+      if(url && cur){ cur.url = url; delete cur.dataUri; scheduleSave(); }
+    }
+  },
+  renameExtra(id, label){
+    const f = current && current.fotosExtra.find(x=>x.id===id);
+    if(f){ f.label = (label||"").trim() || "Evidencia adicional"; scheduleSave(); }
   },
   removeExtra(id){
     if(!current) return;
@@ -2598,6 +2604,11 @@ function pointCodigo(id){
   const p = DB.puntos.find(x=>x.id===id);
   return p ? (p.codigo || p.nombre.slice(0,8)) : "—";
 }
+function puntosParaActa(puntoActualId){
+  // El supervisor solo puede auditar los puntos que tiene asignados (se conserva el punto ya elegido en actas existentes).
+  if(SESSION && SESSION.role==="supervisor") return DB.puntos.filter(p=>p.supervisorId===SESSION.id || p.id===puntoActualId);
+  return DB.puntos;
+}
 function pointsOfSupervisor(supId){
   return DB.puntos.filter(p=>p.supervisorId===supId);
 }
@@ -3560,11 +3571,11 @@ function renderForm(){
     <fieldset class="formblock">
       <legend>Identificación del establecimiento</legend>
       <div class="field-grid">
-        <label class="f" style="grid-column:1/-1;">Punto de dispensación registrado (obligatorio — autocompleta los datos)
+        <label class="f" style="grid-column:1/-1;">Punto de dispensación registrado (obligatorio — autocompleta los datos)${SESSION && SESSION.role==="supervisor" ? ` <span style="font-weight:400;color:var(--ink-soft);">· solo se muestran los puntos que tienes asignados (${DB.puntos.filter(p=>p.supervisorId===SESSION.id).length})</span>` : ""}
           <input type="text" id="h_puntoId_search" placeholder="🔎 Buscar punto por nombre o código…" oninput="filterSelectOptions('h_puntoId_search','h_puntoId')" style="margin-bottom:6px;">
           <select id="h_puntoId">
             <option value="">Seleccionar punto de dispensación…</option>
-            ${DB.puntos.map(p=>`<option value="${p.id}" ${h.puntoId===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""} — ${esc(p.ciudad)}</option>`).join("")}
+            ${puntosParaActa(h.puntoId).map(p=>`<option value="${p.id}" ${h.puntoId===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""} — ${esc(p.ciudad)}</option>`).join("")}
           </select>
         </label>
         <div style="grid-column:1/-1;margin-top:-4px;">
