@@ -756,6 +756,7 @@ canvas.sigpad{
           <button class="subtab" data-psub="mantenimiento" onclick="App.showPuntoSub('mantenimiento')">Mantenimiento de equipos</button>
           <button class="subtab" data-psub="activos" onclick="App.showPuntoSub('activos')">Activos fijos</button>
           <button class="subtab" data-psub="auditorias" onclick="App.showPuntoSub('auditorias')">Mis auditorías</button>
+          <button class="subtab" data-psub="hallazgos" onclick="App.showPuntoSub('hallazgos')">Mis hallazgos</button>
           <button class="subtab" data-psub="password" onclick="App.showPuntoSub('password')">Mi contraseña</button>
         </div>
         <div class="view" id="puntoDocsContent"></div>
@@ -764,6 +765,7 @@ canvas.sigpad{
         <div class="view hidden" id="puntoMantenimientoContent"></div>
         <div class="view hidden" id="puntoActivosContent"></div>
         <div class="view hidden" id="puntoAuditContent"></div>
+        <div class="view hidden" id="puntoHallazgosContent"></div>
         <div class="view hidden" id="puntoPasswordContent"></div>
       </div>
 
@@ -3111,6 +3113,7 @@ async function refreshCurrentView(level){
     if(App.currentPuntoSub==="documentos") renderPuntoDocs();
     else if(App.currentPuntoSub==="temperatura") renderPuntoTemp();
     else if(App.currentPuntoSub==="auditorias") await renderPuntoAudits();
+    else if(App.currentPuntoSub==="hallazgos"){ if(hallazgosFormAbierto.size===0) renderPuntoHallazgos(); }
     return;
   }
 
@@ -3382,15 +3385,34 @@ function renderForm(){
     <fieldset class="formblock">
       <legend>Identificación del establecimiento</legend>
       <div class="field-grid">
-        <label class="f" style="grid-column:1/-1;">Punto de dispensación registrado (opcional — autocompleta los datos)
+        <label class="f" style="grid-column:1/-1;">Punto de dispensación registrado (obligatorio — autocompleta los datos)
           <input type="text" id="h_puntoId_search" placeholder="🔎 Buscar punto por nombre o código…" oninput="filterSelectOptions('h_puntoId_search','h_puntoId')" style="margin-bottom:6px;">
           <select id="h_puntoId">
-            <option value="">Selección manual (sin vincular a un punto registrado)</option>
+            <option value="">Seleccionar punto de dispensación…</option>
             ${DB.puntos.map(p=>`<option value="${p.id}" ${h.puntoId===p.id?"selected":""}>${esc(p.nombre)}${p.codigo?" ("+esc(p.codigo)+")":""} — ${esc(p.ciudad)}</option>`).join("")}
           </select>
         </label>
+        <div style="grid-column:1/-1;margin-top:-4px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="PointCreationRequest.toggle()">➕ Mi punto no está creado: solicitar su creación</button>
+          <div id="h_solCreacion" class="hidden" style="margin-top:8px;padding:12px;border:1px dashed var(--teal-500);border-radius:8px;">
+            <p style="font-size:12.5px;margin:0 0 8px;">Envía los datos básicos del punto al administrador. Cuando lo apruebe, quedará creado a tu nombre y podrás seleccionarlo en el acta.</p>
+            <div class="field-grid">
+              <label class="f">Código (bodega)<input type="text" id="sc_codigo"></label>
+              <label class="f">Nombre del punto<input type="text" id="sc_nombre"></label>
+              <label class="f">Departamento<input type="text" id="sc_depto"></label>
+              <label class="f">Ciudad / Municipio<input type="text" id="sc_ciudad"></label>
+              <label class="f">Dirección<input type="text" id="sc_dir"></label>
+              <label class="f">Tipo de establecimiento
+                <select id="sc_tipo"><option value="">Seleccionar…</option><option value="Farmacia-Droguería">Farmacia - Droguería</option><option value="Droguería">Droguería</option></select>
+              </label>
+              <label class="f">Celular corporativo (opcional)<input type="text" id="sc_cel"></label>
+              <label class="f">Correo corporativo (opcional)<input type="text" id="sc_correo"></label>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="PointCreationRequest.enviar()">Enviar solicitud de creación</button>
+          </div>
+        </div>
         <label class="f">Nombre del establecimiento
-          <input type="text" id="h_establecimientoNombre" value="${esc(h.establecimientoNombre)}">
+          <input type="text" id="h_establecimientoNombre" value="${esc(h.establecimientoNombre)}" ${h.puntoId?"readonly":""}>
         </label>
         <label class="f">Ciudad
           <input type="text" id="h_ciudad" value="${esc(h.ciudad)}">
@@ -3458,6 +3480,9 @@ function renderForm(){
     document.getElementById("h_"+k).addEventListener("input", (e)=>{ current.header[k]=e.target.value; scheduleSave(); });
     document.getElementById("h_"+k).addEventListener("change", (e)=>{ current.header[k]=e.target.value; scheduleSave(); });
   });
+  const fsId = c.querySelector("fieldset.formblock");
+  if(fsId && !document.getElementById("fs_hzPend")) fsId.insertAdjacentHTML("afterend", '<fieldset class="formblock" id="fs_hzPend"></fieldset>');
+  ActaHallazgos.render();
   document.getElementById("h_puntoId").addEventListener("change",(e)=>{
     const pid = e.target.value;
     current.header.puntoId = pid;
@@ -3476,6 +3501,8 @@ function renderForm(){
     } else {
       current.header.supervisorId = "";
     }
+    document.getElementById("h_establecimientoNombre").readOnly = !!point;
+    ActaHallazgos.render();
     scheduleSave();
   });
 
@@ -4136,6 +4163,10 @@ const ActaFlow = {
   },
   async submitForReview(){
     if(!current) return;
+    if(!current.header.puntoId || !DB.puntos.some(p=>p.id===current.header.puntoId)){
+      alert("El acta debe estar vinculada a un punto de dispensación registrado. Selecciónalo en «Identificación del establecimiento» o, si aún no existe, usa «Solicitar su creación» y espera la aprobación del administrador.");
+      return;
+    }
     const done = ratedItemsCount(current.ratings);
     const total = totalItemsCount();
     if(done < total){
@@ -4309,17 +4340,18 @@ async function renderNotificaciones(){
       </div>
 
       <div class="panel">
-        <h3>✏️ Solicitudes de edición de puntos</h3>
+        <h3>✏️ Solicitudes de puntos (edición y creación)</h3>
         ${solicitudesPendientes.length===0 ? `<p style="color:var(--ink-soft);font-size:13px;">No hay solicitudes pendientes.</p>` : `
         <div class="table-wrap"><table class="datatable">
           <thead><tr><th>Punto</th><th>Supervisor</th><th>Campos</th><th></th></tr></thead>
           <tbody>${solicitudesPendientes.map(s=>{
             const point = DB.puntos.find(p=>p.id===s.pointId);
-            const nCampos = Object.keys(s.cambios).length;
+            const nCampos = Object.keys(s.cambios||{}).length;
+            const dp = s.datosPunto || {};
             return `<tr>
-              <td>${point?esc(point.nombre):"(eliminado)"}</td>
+              <td>${s.tipo==="creacion" ? "➕ Crear: "+esc(dp.nombre)+" ("+esc(dp.codigo)+")" : (point?esc(point.nombre):"(eliminado)")}</td>
               <td>${esc(supervisorNombre(s.supervisorId))}</td>
-              <td>${nCampos} campo(s) modificado(s)</td>
+              <td>${s.tipo==="creacion" ? "Solicitud de creación · "+esc(dp.ciudad||"")+", "+esc(dp.departamento||"")+" · "+esc(dp.tipoEstablecimiento||"") : nCampos+" campo(s) modificado(s)"}</td>
               <td style="white-space:nowrap;">
                 <button class="btn btn-primary btn-sm" onclick="PointRequests.approve('${s.id}').then(renderNotificaciones)">Aprobar</button>
                 <button class="btn btn-danger btn-sm" onclick="PointRequests.reject('${s.id}').then(renderNotificaciones)">Rechazar</button>
@@ -4405,7 +4437,7 @@ async function renderNotificaciones(){
       </div>` : ""}
 
       <div class="panel">
-        <h3>✏️ Mis solicitudes de edición de puntos</h3>
+        <h3>✏️ Mis solicitudes de puntos (edición y creación)</h3>
         ${misSolicitudes.length===0 ? `<p style="color:var(--ink-soft);font-size:13px;">Aún no has enviado solicitudes de edición.</p>` : `
         <div class="table-wrap"><table class="datatable">
           <thead><tr><th>Punto</th><th>Fecha</th><th>Estado</th></tr></thead>
@@ -4413,7 +4445,7 @@ async function renderNotificaciones(){
             const point = DB.puntos.find(p=>p.id===s.pointId);
             const cls = s.estado==="Pendiente" ? "chip-pendiente" : s.estado==="Aprobado" ? "chip-aprobado" : "chip-rechazado";
             return `<tr>
-              <td>${point?esc(point.nombre):"(eliminado)"}</td>
+              <td>${s.tipo==="creacion" ? "➕ Crear: "+esc((s.datosPunto||{}).nombre||"") : (point?esc(point.nombre):"(eliminado)")}</td>
               <td>${s.fechaSolicitud ? new Date(s.fechaSolicitud).toLocaleDateString('es-CO') : "—"}</td>
               <td><span class="chip-mini ${cls}">${esc(s.estado)}</span></td>
             </tr>`;
@@ -4729,6 +4761,30 @@ const PointRequests = {
   async approve(id){
     const sol = DB.solicitudes.find(x=>x.id===id);
     if(!sol) return;
+    if(sol.tipo==="creacion"){
+      const d = sol.datosPunto || {};
+      if(DB.puntos.some(x=>(x.codigo||"").trim().toLowerCase()===(d.codigo||"").trim().toLowerCase())){
+        alert(`Ya existe un punto con el código "${d.codigo}". Rechaza la solicitud o corrige el código.`); return;
+      }
+      const np = blankPoint();
+      Object.assign(np, {codigo:d.codigo, nombre:d.nombre, departamento:d.departamento, ciudad:d.ciudad, direccion:d.direccion,
+        tipoEstablecimiento:d.tipoEstablecimiento, celularCorporativo:d.celularCorporativo||"", correoCorporativo:d.correoCorporativo||"", supervisorId:sol.supervisorId||""});
+      DB.puntos.push(np);
+      await saveMaster(MASTER_KEYS.puntos, DB.puntos);
+      sol.pointId = np.id;
+      sol.estado = "Aprobado";
+      sol.fechaResolucion = new Date().toISOString();
+      await saveMaster(MASTER_KEYS.solicitudes, DB.solicitudes);
+      if(sol.supervisorId){
+        await addNotificacion({
+          mensaje: `El administrador aprobó la creación del punto ${np.nombre}. Ya puedes seleccionarlo en el acta de auditoría.`,
+          forRole: "supervisor", forSupervisorId: sol.supervisorId, accion: {tipo:"solicitudes"}, icono:"✅"
+        });
+      }
+      renderNotificaciones();
+      initOperativeMap();
+      return;
+    }
     const p = DB.puntos.find(x=>x.id===sol.pointId);
     if(p){
       Object.assign(p, sol.cambios);
@@ -4758,9 +4814,9 @@ const PointRequests = {
     sol.fechaResolucion = new Date().toISOString();
     await saveMaster(MASTER_KEYS.solicitudes, DB.solicitudes);
     if(sol.supervisorId){
-      const p = DB.puntos.find(x=>x.id===sol.pointId);
+      const p = sol.tipo==="creacion" ? {nombre:(sol.datosPunto||{}).nombre||"—"} : DB.puntos.find(x=>x.id===sol.pointId);
       await addNotificacion({
-        mensaje: `El administrador rechazó tu solicitud de edición del punto ${p?p.nombre:"—"}. Motivo: ${comentario||"sin especificar"}. Ve a revisar.`,
+        mensaje: `El administrador rechazó tu solicitud de ${sol.tipo==="creacion"?"creación":"edición"} del punto ${p?p.nombre:"—"}. Motivo: ${comentario||"sin especificar"}. Ve a revisar.`,
         forRole: "supervisor",
         forSupervisorId: sol.supervisorId,
         accion: {tipo:"solicitudes"},
@@ -5728,6 +5784,177 @@ async function renderPuntoAudits(){
     </div>
   `;
 }
+
+
+/* =========================================================
+   PUNTO · MIS HALLAZGOS (el punto participa en la subsanación)
+   ========================================================= */
+async function guardarEvidenciaHallazgo(h, file, comentario, extra){
+  const dataUri = await fileToDataUri(file);
+  h.evidenciaNombre = file.name;
+  h.evidenciaDataUri = dataUri; // respaldo local por si falla la subida a R2
+  h.evidenciaUrl = "";
+  h.evidenciaComentario = comentario;
+  h.evidenciaEnviadaAt = new Date().toISOString();
+  h.estadoAprobacion = "Pendiente";
+  if(h.estado==="Abierto") h.estado = "En gestión";
+  Object.assign(h, extra||{});
+  await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+  const extMatch = /\.([a-zA-Z0-9]+)$/.exec(file.name || "");
+  const ext = extMatch ? extMatch[1].toLowerCase() : "bin";
+  const url = await uploadToR2(dataUri, `hallazgos/${h.id}/evidencia_${Date.now()}.${ext}`);
+  if(url){ h.evidenciaUrl = url; h.evidenciaDataUri = ""; await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos); }
+}
+async function notificarSubsanacionHallazgo(h, quien){
+  const msg = `${quien} subsanó el hallazgo #${h.itemNum} del acta de auditoría del punto ${h.puntoNombre}, ve a revisar.`;
+  await addNotificacion({mensaje:msg, forRole:"admin", accion:{tipo:"hallazgo", hallazgoId:h.id}, icono:"📎"});
+  if(h.supervisorId) await addNotificacion({mensaje:msg, forRole:"supervisor", forSupervisorId:h.supervisorId, accion:{tipo:"hallazgo", hallazgoId:h.id}, icono:"📎"});
+}
+function ultimoRechazoHallazgo(h){
+  const m = (h.notasGestion||"").split("\n").filter(l=>l.startsWith("Rechazo de cierre"));
+  return m.length ? m[m.length-1] : "";
+}
+async function renderPuntoHallazgos(){
+  const el = document.getElementById("puntoHallazgosContent");
+  if(!el) return;
+  if(!SESSION || SESSION.role!=="punto"){ el.innerHTML = ""; return; }
+  const list = DB.hallazgos.filter(h=>h.pointId===SESSION.id).sort((a,b)=>{
+    const ra = a.estado==="Subsanado"?1:0, rb = b.estado==="Subsanado"?1:0;
+    return ra-rb || (b.fechaDeteccion||"").localeCompare(a.fechaDeteccion||"");
+  });
+  const abiertos = list.filter(h=>h.estado!=="Subsanado" && h.estadoAprobacion!=="Pendiente").length;
+  const enRevision = list.filter(h=>h.estado!=="Subsanado" && h.estadoAprobacion==="Pendiente").length;
+  const cerrados = list.filter(h=>h.estado==="Subsanado").length;
+  const critLbl = {critico:"Crítico", mayor:"Mayor", menor:"Menor"};
+  const ratLbl = {AR:"Con requerimiento", I:"Inaceptable"};
+  const filas = list.map(h=>{
+    const a = DB.audits.find(x=>x.id===h.auditId);
+    const acta = a && a.header ? (a.header.acta||"s/n") : "—";
+    let estadoHtml;
+    if(h.estado==="Subsanado") estadoHtml = `<span style="color:var(--green);font-weight:700;font-size:12px;">✓ Subsanado${h.fechaCierre?" · "+esc(h.fechaCierre):""}</span>`;
+    else if(h.estadoAprobacion==="Pendiente") estadoHtml = `<span class="chip-mini" style="background:var(--amber-bg);color:var(--amber);">⏳ En revisión del administrador</span>`;
+    else estadoHtml = `<span class="chip-mini chip-rechazado">${h.estado==="En gestión"?"En gestión":"Abierto"}</span>`;
+    const rech = h.estadoAprobacion==="Rechazada" ? `<div style="font-size:11px;color:var(--red);margin-top:3px;">Cierre rechazado: ${esc(ultimoRechazoHallazgo(h).replace(/^Rechazo de cierre \([^)]*\):\s*/,""))||"vuelve a enviar evidencia"}</div>` : "";
+    const ev = (h.evidenciaUrl||h.evidenciaDataUri) ? `<br><a href="${h.evidenciaUrl||h.evidenciaDataUri}" download="${esc(h.evidenciaNombre||'evidencia')}" style="font-size:11px;">📎 Ver evidencia</a>` : "";
+    const puede = h.estado!=="Subsanado" && h.estadoAprobacion!=="Pendiente";
+    const accion = puede ? `<button class="btn btn-ghost btn-sm" onclick="PuntoHallazgos.toggle('${h.id}')">📎 Subsanar</button>` : "";
+    const form = (puede && hallazgosFormAbierto.has(h.id)) ? `<tr><td colspan="9" style="background:var(--teal-100);padding:12px 16px;">
+        <strong style="font-size:12.5px;">Adjuntar evidencia de subsanación — ítem ${esc(h.itemNum)}</strong>
+        <div class="inline-form" style="margin-top:6px;">
+          <label class="f">Archivo (foto, PDF, etc.)<input type="file" id="hz_file_${h.id}"></label>
+          <label class="f" style="flex:2;">¿Cómo se subsanó?<textarea id="hz_comentario_${h.id}" rows="2" placeholder="Describe la acción correctiva realizada…"></textarea></label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="PuntoHallazgos.enviar('${h.id}')">Enviar para aprobación</button>
+        <button class="btn btn-ghost btn-sm" onclick="PuntoHallazgos.toggle('${h.id}')">Cancelar</button>
+      </td></tr>` : "";
+    return `<tr id="hz-row-${h.id}">
+      <td>${esc(acta)}</td><td>${esc(h.fechaDeteccion||"").slice(0,10)}</td><td><strong>${esc(h.itemNum)}</strong></td>
+      <td style="min-width:240px;font-size:12px;">${esc(h.itemText)}${h.observacion?`<div style="color:var(--ink-soft);margin-top:3px;">Obs.: ${esc(h.observacion)}</div>`:""}</td>
+      <td>${esc(critLbl[h.crit]||h.crit||"")}<div style="font-size:11px;color:var(--ink-soft);">${esc(ratLbl[h.rating]||"")}</div></td>
+      <td style="min-width:200px;font-size:12px;">${esc(h.accionSugerida||"")}</td>
+      <td>${esc(h.fechaCompromiso||"—")}</td>
+      <td>${estadoHtml}${rech}${ev}</td><td>${accion}</td></tr>${form}`;
+  }).join("");
+  el.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-num">${list.length}</div><div class="kpi-lbl">Hallazgos de mi punto</div></div>
+      <div class="kpi-card"><div class="kpi-num" style="color:${abiertos?'var(--red)':'var(--ink)'};">${abiertos}</div><div class="kpi-lbl">Por subsanar</div></div>
+      <div class="kpi-card"><div class="kpi-num">${enRevision}</div><div class="kpi-lbl">En revisión</div></div>
+      <div class="kpi-card"><div class="kpi-num" style="color:var(--green);">${cerrados}</div><div class="kpi-lbl">Subsanados</div></div>
+    </div>
+    <div class="panel">
+      <h3>Mis hallazgos</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Hallazgos registrados en las actas de auditoría de tu punto. Puedes subsanarlos adjuntando la evidencia y describiendo la acción realizada; el administrador la revisa y aprueba el cierre.</p>
+      <div class="table-wrap"><table class="datatable">
+        <thead><tr><th>Acta N°</th><th>Detectado</th><th>Ítem</th><th>Hallazgo</th><th>Criticidad</th><th>Acción sugerida</th><th>Compromiso</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${filas || `<tr><td colspan="9" style="color:var(--ink-soft);">Tu punto no tiene hallazgos registrados. 👍</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+}
+const PuntoHallazgos = {
+  toggle(id){
+    if(hallazgosFormAbierto.has(id)) hallazgosFormAbierto.delete(id); else hallazgosFormAbierto.add(id);
+    renderPuntoHallazgos();
+  },
+  async enviar(id){
+    const h = DB.hallazgos.find(x=>x.id===id);
+    if(!h || h.pointId!==SESSION.id) return;
+    const fileInput = document.getElementById("hz_file_"+id);
+    const comentario = (document.getElementById("hz_comentario_"+id)||{value:""}).value.trim();
+    const file = fileInput && fileInput.files[0];
+    if(!file){ alert("Adjunta un archivo que evidencie la subsanación."); return; }
+    if(comentario===""){ alert("Describe brevemente cómo se subsanó el hallazgo."); return; }
+    try{
+      await guardarEvidenciaHallazgo(h, file, comentario, {subsanadoPor:"punto", evidenciaPorNombre:SESSION.nombre||""});
+    }catch(e){ alert("No se pudo leer el archivo. Intenta de nuevo."); return; }
+    hallazgosFormAbierto.delete(id);
+    await notificarSubsanacionHallazgo(h, `El punto ${h.puntoNombre}`);
+    renderPuntoHallazgos();
+    alert("Evidencia enviada. El administrador revisará y aprobará el cierre del hallazgo.");
+  }
+};
+
+/* =========================================================
+   ACTA · ligada a un punto registrado + hallazgos pendientes + solicitud de creación
+   ========================================================= */
+const PointCreationRequest = {
+  toggle(){ const el = document.getElementById("h_solCreacion"); if(el) el.classList.toggle("hidden"); },
+  async enviar(){
+    const v = id=>(document.getElementById(id)||{value:""}).value.trim();
+    const d = {codigo:v("sc_codigo"), nombre:v("sc_nombre"), departamento:v("sc_depto"), ciudad:v("sc_ciudad"), direccion:v("sc_dir"),
+      tipoEstablecimiento:v("sc_tipo"), celularCorporativo:v("sc_cel"), correoCorporativo:v("sc_correo")};
+    if(!d.codigo||!d.nombre||!d.departamento||!d.ciudad||!d.direccion||!d.tipoEstablecimiento){
+      alert("Completa código, nombre, departamento, ciudad, dirección y tipo de establecimiento."); return;
+    }
+    if(!SESSION || SESSION.role!=="supervisor"){ alert("Solo el supervisor envía solicitudes de creación. El administrador puede crear el punto directamente en la pestaña Director."); return; }
+    const cod = d.codigo.toLowerCase();
+    if(DB.puntos.some(p=>(p.codigo||"").trim().toLowerCase()===cod)){ alert("Ya existe un punto con ese código. Búscalo en la lista de puntos del acta."); return; }
+    if(DB.solicitudes.some(x=>x.tipo==="creacion" && x.estado==="Pendiente" && ((x.datosPunto||{}).codigo||"").trim().toLowerCase()===cod)){ alert("Ya hay una solicitud de creación pendiente con ese código."); return; }
+    const sol = blankSolicitud();
+    sol.tipo = "creacion"; sol.datosPunto = d; sol.supervisorId = SESSION.id; sol.fechaSolicitud = new Date().toISOString();
+    DB.solicitudes.push(sol);
+    await saveMaster(MASTER_KEYS.solicitudes, DB.solicitudes);
+    await addNotificacion({mensaje:`El supervisor ${supervisorNombre(SESSION.id)} solicitó crear el punto ${d.nombre} (${d.codigo}). Ve a revisar.`, forRole:"admin", accion:{tipo:"solicitudes"}, icono:"➕"});
+    ["sc_codigo","sc_nombre","sc_depto","sc_ciudad","sc_dir","sc_tipo","sc_cel","sc_correo"].forEach(id=>{const e=document.getElementById(id); if(e) e.value="";});
+    this.toggle();
+    alert("Solicitud enviada al administrador. Cuando la apruebe, el punto quedará creado y podrás seleccionarlo en el acta (te llegará una notificación).");
+  }
+};
+const ActaHallazgos = {
+  render(){
+    const box = document.getElementById("fs_hzPend"); if(!box || !current) return;
+    const pid = current.header.puntoId;
+    if(!pid){ box.innerHTML = `<legend>Hallazgos pendientes del punto</legend><p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Selecciona el punto de dispensación para ver los hallazgos pendientes de actas anteriores y registrar los que se subsanaron en esta visita.</p>`; return; }
+    const list = DB.hallazgos.filter(h=>h.pointId===pid && h.auditId!==current.id && h.estado!=="Subsanado").sort((a,b)=>(a.fechaCompromiso||"").localeCompare(b.fechaCompromiso||""));
+    box.innerHTML = `<legend>Hallazgos pendientes del punto (actas anteriores)</legend>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Si durante esta visita verificas que un hallazgo ya fue subsanado, regístralo aquí: queda enviado al administrador para aprobar el cierre.</p>
+      ${list.length===0 ? `<p style="font-size:13px;margin:0;">Este punto no tiene hallazgos pendientes. 👍</p>` : `
+      <div class="table-wrap"><table class="datatable">
+        <thead><tr><th>Ítem</th><th>Hallazgo</th><th>Compromiso</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${list.map(h=>{
+          const pend = h.estadoAprobacion==="Pendiente";
+          return `<tr><td><strong>${esc(h.itemNum)}</strong></td><td style="font-size:12px;min-width:240px;">${esc(h.itemText)}</td><td>${esc(h.fechaCompromiso||"—")}</td>
+            <td>${pend?`<span class="chip-mini" style="background:var(--amber-bg);color:var(--amber);">⏳ En revisión</span>`:esc(h.estado)}</td>
+            <td>${pend?"":`<button type="button" class="btn btn-ghost btn-sm" onclick="ActaHallazgos.verificar('${h.id}')">✔ Subsanado en esta visita</button>`}</td></tr>`;
+        }).join("")}</tbody></table></div>`}`;
+  },
+  async verificar(id){
+    const h = DB.hallazgos.find(x=>x.id===id); if(!h || !current) return;
+    const c = prompt(`Describe lo verificado en la visita para el ítem ${h.itemNum} (cómo se subsanó):`, "");
+    if(c===null) return;
+    if(!c.trim()){ alert("Escribe una breve descripción de lo verificado."); return; }
+    const actaTxt = current.header.acta ? ` (acta N° ${current.header.acta})` : "";
+    h.evidenciaComentario = `Verificado en visita de auditoría${actaTxt}: ${c.trim()}`;
+    h.evidenciaNombre = ""; h.evidenciaDataUri = ""; h.evidenciaUrl = "";
+    h.evidenciaEnviadaAt = new Date().toISOString();
+    h.estadoAprobacion = "Pendiente";
+    if(h.estado==="Abierto") h.estado = "En gestión";
+    h.subsanadoPor = "acta"; h.verificadoEnActa = current.id;
+    await saveMaster(MASTER_KEYS.hallazgos, DB.hallazgos);
+    await notificarSubsanacionHallazgo(h, "El auditor, en una nueva visita,");
+    this.render();
+  }
+};
 
 const PuntoAudits = {
   viewActa(auditId){
@@ -7640,6 +7867,7 @@ const App = {
     document.getElementById("puntoMantenimientoContent").classList.toggle("hidden", sub!=="mantenimiento");
     document.getElementById("puntoActivosContent").classList.toggle("hidden", sub!=="activos");
     document.getElementById("puntoAuditContent").classList.toggle("hidden", sub!=="auditorias");
+    document.getElementById("puntoHallazgosContent").classList.toggle("hidden", sub!=="hallazgos");
     document.getElementById("puntoPasswordContent").classList.toggle("hidden", sub!=="password");
     document.querySelectorAll('[data-psub]').forEach(b=>b.classList.toggle("active", b.dataset.psub===sub));
     if(sub==="documentos") renderPuntoDocs();
@@ -7648,6 +7876,7 @@ const App = {
     if(sub==="mantenimiento") renderPuntoMantenimiento();
     if(sub==="activos") renderPuntoActivos();
     if(sub==="auditorias") renderPuntoAudits();
+    if(sub==="hallazgos") renderPuntoHallazgos();
     if(sub==="password") renderMiPassword("puntoPasswordContent");
   },
   show(view){
