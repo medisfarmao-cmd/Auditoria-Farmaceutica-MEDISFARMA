@@ -173,6 +173,15 @@ td.num,th.num{text-align:right}
 .upbtn.main{background:#fff;color:#0062d6;border-color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .upbtn.main:hover{background:#eef6ff}
 .upbtn:focus-within{outline:3px solid rgba(255,255,255,.7);outline-offset:2px}
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}
+.fchip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 6px 3px 12px;font-size:.8rem;font-weight:600}
+.fchip button{all:unset;cursor:pointer;width:20px;height:20px;border-radius:50%;text-align:center;line-height:20px;background:rgba(255,255,255,.25)}
+.fchip button:hover{background:rgba(255,255,255,.45)}
+.fchip.all{background:transparent;border-style:dashed}
+.dfil{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dfil input[type=date]{font:inherit;font-size:.85rem;padding:5px 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface2);color:var(--ink)}
+.dfil input:disabled{opacity:.5}
+.dfil .clear{margin-left:0}
 .uphint{font-size:.82rem;opacity:.9;max-width:44ch}
 .drop{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:color-mix(in srgb,var(--brand1) 70%,transparent);backdrop-filter:blur(3px);pointer-events:none}
 .drop div{background:var(--surface);color:var(--ink);border:3px dashed var(--brand1);border-radius:20px;padding:36px 44px;display:grid;gap:4px;text-align:center}
@@ -222,15 +231,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,th:focus-visible{o
   <div class="chips" id="chips"></div>
   <div class="up">
     <label class="upbtn main" for="inTurnos"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Cargar archivo de turnos</label>
-    <input type="file" id="inTurnos" accept=".csv,.txt,.xlsx,.xls" hidden>
+    <input type="file" id="inTurnos" accept=".csv,.txt,.xlsx,.xls" multiple hidden>
     <label class="upbtn" for="inDiag"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Actualizar diagnóstico</label>
     <input type="file" id="inDiag" accept=".xlsx,.xls" hidden>
-    <span class="uphint">CSV separado por “|” o Excel del reporte de turnos · también puede arrastrar el archivo a la página</span>
+    <span class="uphint">CSV separado por “|” o Excel del reporte de turnos. El ERP entrega máx. 30 días: cargue hasta dos reportes (o más) y la aplicación los une y ordena por fecha; los días repetidos entre reportes no se duplican. También puede arrastrar los archivos a la página.</span>
+    <div class="fchips" id="fchips"></div>
   </div>
 </div></div></header>
 
 <div class="bar gut"><div class="in">
   <div class="filters">
+    <span class="dfil"><label for="fD0">Desde</label><input type="date" id="fD0" disabled><label for="fD1">Hasta</label><input type="date" id="fD1" disabled><button class="clear" id="dAll" disabled>Todo el periodo</button></span>
     <label for="fDep">Depto</label><select id="fDep"></select>
     <label for="fEst">Estado</label><select id="fEst"></select>
     <label for="fSup">Supervisor</label><select id="fSup"></select>
@@ -690,21 +701,59 @@ const busy=(on,msg)=>{$('#busy').hidden=!on;if(msg)$('#busyMsg').textContent=msg
 const tick=()=>new Promise(r=>setTimeout(r,30));
 function decode(buf){try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){return new TextDecoder('windows-1252').decode(buf)}}
 const isXlsx=f=>/\.xlsx?$/i.test(f.name);
-async function loadTurnos(file){
-  busy(true,`Leyendo ${file.name}…`);await tick();
+let FILES=[],DF={d0:'',d1:''};
+function mergedRecs(){ // por cada fecha se toma el reporte con más turnos: los días solapados entre reportes no se duplican
+  const best={};
+  FILES.forEach((F,i)=>{const c={};F.recs.forEach(r=>{c[r.f]=(c[r.f]||0)+1});Object.entries(c).forEach(([d,n])=>{if(!best[d]||n>best[d].n)best[d]={n,i}})});
+  const out=[];FILES.forEach((F,i)=>F.recs.forEach(r=>{if(best[r.f].i===i)out.push(r)}));
+  return out.sort((x,y)=>x.f<y.f?-1:x.f>y.f?1:0);
+}
+function bounds(){const m=mergedRecs();return m.length?[m[0].f,m[m.length-1].f]:['','']}
+const dmy=d=>d.split('-').reverse().join('/');
+function renderFiles(){
+  const box=$('#fchips');if(!box)return;
+  box.innerHTML=FILES.map((F,i)=>`<span class="fchip" title="${F.name}">${F.name.length>34?F.name.slice(0,31)+'…':F.name} · ${F.min?dmy(F.min)+' – '+dmy(F.max):''} · ${fmt(F.recs.length)} turnos<button data-rm="${i}" aria-label="Quitar ${F.name}">×</button></span>`).join('')+(FILES.length>1?'<span class="fchip all">Combinados: '+(()=>{const [a,b]=bounds();return dmy(a)+' – '+dmy(b)})()+'</span>':'');
+  box.querySelectorAll('[data-rm]').forEach(bt=>bt.onclick=()=>{FILES.splice(+bt.dataset.rm,1);DF={d0:'',d1:''};recompute()});
+  const [a,b]=bounds(),d0=$('#fD0'),d1=$('#fD1'),on=!!FILES.length;
+  [d0,d1,$('#dAll')].forEach(x=>x.disabled=!on);
+  d0.min=d1.min=a;d0.max=d1.max=b;d0.value=DF.d0||a;d1.value=DF.d1||b;
+}
+function currentRecs(){let r=mergedRecs();if(DF.d0)r=r.filter(x=>x.f>=DF.d0);if(DF.d1)r=r.filter(x=>x.f<=DF.d1);return r}
+async function recompute(msg){
+  if(!FILES.length){RECS=null;renderFiles();return}
+  busy(true,'Combinando y recalculando…');await tick();
   try{
-    const buf=await file.arrayBuffer();let rows;
-    if(isXlsx(file)){if(!window.XLSX)throw new Error('La librería de Excel no cargó; use el CSV.');const wb=XLSX.read(buf,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'dd/mm/yyyy',defval:''}).map(r=>r.map(v=>String(v)))}
-    else rows=Engine.parseDelimited(decode(buf));
-    // si la hoja es un diagnóstico, cargarlo como tal
-    if(isXlsx(file)&&rows.slice(0,8).some(r=>r.some(v=>/^ESTADO$/i.test(String(v).trim())))&&rows.slice(0,8).some(r=>r.some(v=>/^BODEGA$/i.test(String(v).trim())))){busy(false);return loadDiag(file)}
-    busy(true,`Procesando ${fmt(rows.length-1)} registros…`);await tick();
-    const {recs,bad}=Engine.recordsFromRows(rows);RECS=recs;META={fileName:file.name,bad};
-    const data=Engine.analyze(recs,DIAG,Object.assign({diagName:META.diagName},META));
-    setData(data,true);
-    toast(`Listo: ${fmt(recs.length)} turnos de ${file.name} (${G.periodo})`+(bad?` · ${bad} filas sin fecha válida omitidas`:''));
-  }catch(e){toast('No se pudo procesar el archivo: '+(e.message||e))}
+    RECS=currentRecs();
+    if(!RECS.length)throw new Error('No hay turnos en el rango de fechas elegido.');
+    META={fileName:FILES.map(f=>f.name).join(' + '),bad:FILES.reduce((n,f)=>n+f.bad,0),diagName:META.diagName};
+    setData(Engine.analyze(RECS,DIAG,META),true);
+    renderFiles();
+    if(msg)toast(msg(RECS.length))
+  }catch(e){toast('No se pudo procesar: '+(e.message||e));renderFiles()}
   finally{busy(false)}
+}
+async function readTurnosFile(file){
+  const buf=await file.arrayBuffer();let rows;
+  if(isXlsx(file)){if(!window.XLSX)throw new Error('La librería de Excel no cargó; use el CSV.');const wb=XLSX.read(buf,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'dd/mm/yyyy',defval:''}).map(r=>r.map(v=>String(v==null?'':v)))}
+  else rows=Engine.parseDelimited(decode(buf));
+  if(isXlsx(file)&&rows.slice(0,8).some(r=>r.some(v=>/^ESTADO$/i.test(String(v).trim())))&&rows.slice(0,8).some(r=>r.some(v=>/^BODEGA$/i.test(String(v).trim())))) return {diag:true};
+  const {recs,bad}=Engine.recordsFromRows(rows);
+  if(!recs.length)throw new Error('no se encontraron turnos con fecha válida');
+  const fs=recs.map(r=>r.f).sort();
+  return {name:file.name,recs,bad,min:fs[0],max:fs[fs.length-1]};
+}
+async function loadTurnos(files){
+  files=[].concat(files);let added=0;
+  for(const file of files){
+    busy(true,`Leyendo ${file.name}…`);await tick();
+    try{
+      const r=await readTurnosFile(file);
+      if(r.diag){busy(false);await loadDiag(file);continue}
+      const i=FILES.findIndex(f=>f.name===r.name);if(i>=0)FILES[i]=r;else FILES.push(r);added++;
+    }catch(e){toast(`No se pudo procesar ${file.name}: `+(e.message||e))}
+  }
+  busy(false);
+  if(added){DF={d0:'',d1:''};await recompute(n=>`Listo: ${fmt(n)} turnos de ${FILES.length} archivo${FILES.length>1?'s combinados':''} (${G.periodo})`)}
 }
 async function loadDiag(file){
   busy(true,`Leyendo diagnóstico ${file.name}…`);await tick();
@@ -721,7 +770,10 @@ async function loadDiag(file){
   }catch(e){toast('No se pudo leer el diagnóstico: '+(e.message||e))}
   finally{busy(false)}
 }
-$('#inTurnos').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadTurnos(f);e.target.value=''});
+$('#inTurnos').addEventListener('change',e=>{const f=[...e.target.files];if(f.length)loadTurnos(f);e.target.value=''});
+let dTimer;const onDate=()=>{clearTimeout(dTimer);dTimer=setTimeout(()=>{const [a,b]=bounds();let d0=$('#fD0').value,d1=$('#fD1').value;if(d0&&d1&&d0>d1)[d0,d1]=[d1,d0];DF={d0:d0===a?'':d0,d1:d1===b?'':d1};recompute(n=>`Rango aplicado: ${fmt(n)} turnos`)},350)};
+$('#fD0').addEventListener('change',onDate);$('#fD1').addEventListener('change',onDate);
+$('#dAll').addEventListener('click',()=>{DF={d0:'',d1:''};recompute(n=>`Todo el periodo: ${fmt(n)} turnos`)});
 function medisApply(sh,notify){ try{ const diag=Engine.diagFromSheetRows(sh.rows); const ops=Engine.operating(diag); if(!ops.length) return; DIAG=diag; META.diagName=(sh.name||'Diagnóstico del Director'); if(RECS){ setData(Engine.analyze(RECS,DIAG,META),true); } if(notify) toast(`Diagnóstico del Director aplicado: ${ops.length} puntos operando con habilitación`+(RECS?'':'. Cargue el archivo de turnos para recalcular.')); }catch(e){ console.warn('Diagnóstico compartido no aplicado',e); } }
 try{ const sh=JSON.parse(localStorage.getItem('medis_diag_v1')||'null'); if(sh&&Array.isArray(sh.rows)&&sh.rows.length) medisApply(sh,false); }catch(_){}
 window.addEventListener('message',e=>{ if(e.origin!==location.origin||!e.data||e.data.type!=='medis-diag'||!e.data.diag) return; try{ localStorage.setItem('medis_diag_v1',JSON.stringify(e.data.diag)); }catch(_){} medisApply(e.data.diag,true); });
@@ -730,7 +782,7 @@ let dragN=0;
 addEventListener('dragenter',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){dragN++;$('#drop').hidden=false}});
 addEventListener('dragleave',()=>{dragN=Math.max(0,dragN-1);if(!dragN)$('#drop').hidden=true});
 addEventListener('dragover',e=>e.preventDefault());
-addEventListener('drop',e=>{e.preventDefault();dragN=0;$('#drop').hidden=true;const f=e.dataTransfer?.files?.[0];if(f)loadTurnos(f)});
+addEventListener('drop',e=>{e.preventDefault();dragN=0;$('#drop').hidden=true;const f=[...(e.dataTransfer?.files||[])];if(f.length)loadTurnos(f)});
 
 
 /* ---------- supervisores ---------- */
