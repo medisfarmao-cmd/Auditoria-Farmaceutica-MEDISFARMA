@@ -2893,8 +2893,13 @@ async function uploadToR2(dataUri, keyPath){
 const AREA_OPTIONS = ["Almacenamiento","Cadena de frío","Recepción","Cuarentena","Bodega"];
 
 function blankInstrument(){
-  return {id:uid("inst"), pointId:"", tipo:"Termómetro", area:"Almacenamiento", numeroCalibracion:"", fechaVencimientoCalibracion:"", activo:true, createdAt:new Date().toISOString()};
+  return {id:uid("inst"), pointId:"", tipo:"Termómetro", area:"Almacenamiento", marca:"", serie:"", numeroCalibracion:"", fechaVencimientoCalibracion:"", activo:true, createdAt:new Date().toISOString(),
+    estadoAprobacion:"Pendiente", certNombre:"", certUrl:"", certDataUri:"", comentarioRevision:"", revisadoPor:"", revisadoAt:""};
 }
+/* Un instrumento solo es indicador de toma de temperatura cuando está APROBADO (los creados antes de este control, sin estado, se consideran aprobados). */
+function instEstado(i){ return i.estadoAprobacion || "Aprobado"; }
+function instAprobado(i){ return instEstado(i)==="Aprobado"; }
+function instTieneCert(i){ return !!(i.certUrl || i.certDataUri); }
 function calibrationStatus(fechaVencimiento){
   if(!fechaVencimiento) return {status:"sin-fecha", dias:null};
   const hoy = new Date(todayStr()+"T00:00:00");
@@ -4717,7 +4722,7 @@ async function renderNotificaciones(){
     const actasPendientes = listAudits().filter(a=>a.estadoRevision==="Enviada");
     const solicitudesPendientes = DB.solicitudes.filter(s=>s.estado==="Pendiente");
     const docsPendientes = DB.documentos.filter(d=>d.status==="En revisión");
-    const calAlertas = DB.instrumentos.map(i=>({i, cal:calibrationStatus(i.fechaVencimientoCalibracion)})).filter(x=>x.cal.status==="vencida"||x.cal.status==="proxima");
+    const calAlertas = DB.instrumentos.filter(instAprobado).map(i=>({i, cal:calibrationStatus(i.fechaVencimientoCalibracion)})).filter(x=>x.cal.status==="vencida"||x.cal.status==="proxima");
     const hallazgosAbiertos = DB.hallazgos.filter(h=>h.estado==="Abierto").length;
 
     html += `
@@ -4798,7 +4803,7 @@ async function renderNotificaciones(){
     const docsPendientes = DB.documentos.filter(d=>d.status==="En revisión" && misPuntos.includes(d.pointId));
     const misActasRechazadas = listAudits().filter(a=>a.estadoRevision==="Rechazada" && a.header.supervisorId===mySupervisorId);
     const misSolicitudes = DB.solicitudes.filter(s=>s.supervisorId===mySupervisorId).sort((a,b)=>(b.fechaSolicitud||"").localeCompare(a.fechaSolicitud||"")).slice(0,10);
-    const calAlertas = DB.instrumentos.filter(i=>misPuntos.includes(i.pointId)).map(i=>({i, cal:calibrationStatus(i.fechaVencimientoCalibracion)})).filter(x=>x.cal.status==="vencida"||x.cal.status==="proxima");
+    const calAlertas = DB.instrumentos.filter(i=>instAprobado(i) && misPuntos.includes(i.pointId)).map(i=>({i, cal:calibrationStatus(i.fechaVencimientoCalibracion)})).filter(x=>x.cal.status==="vencida"||x.cal.status==="proxima");
     const hallazgosAbiertos = DB.hallazgos.filter(h=>h.supervisorId===mySupervisorId && h.estado==="Abierto").length;
 
     html += `
@@ -6393,7 +6398,8 @@ function renderPuntoTemp(){
   const point = DB.puntos.find(p=>p.id===pid);
   if(!point){ el.innerHTML = `<div class="panel"><p>No se encontró el punto seleccionado.</p></div>`; return; }
 
-  const instruments = instrumentsOfPoint(point.id);
+  const allInstruments = instrumentsOfPoint(point.id);
+  const instruments = allInstruments.filter(instAprobado);
   const today = todayStr();
   const sunday = isSundayStr(today);
   const calAlerts = instruments.map(i=>({i, cal:calibrationStatus(i.fechaVencimientoCalibracion)})).filter(x=>x.cal.status==="vencida"||x.cal.status==="proxima");
@@ -6406,7 +6412,7 @@ function renderPuntoTemp(){
     </div>` : ""}
     <div class="panel">
       <h3>Instrumentos de monitoreo</h3>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Registra cada termómetro o termohigrómetro con su número de calibración y el área que monitorea.</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Registra cada termómetro o termohigrómetro con su número de calibración y el área que monitorea. <strong>Es obligatorio adjuntar el certificado de calibración</strong>; el instrumento se envía al supervisor para su aprobación y solo después de aprobado podrás registrar tomas de temperatura con él.</p>
       <div class="inline-form">
         <label class="f">Tipo
           <select id="ti_tipo">
@@ -6419,15 +6425,20 @@ function renderPuntoTemp(){
             ${AREA_OPTIONS.map(a=>`<option value="${a}">${a}</option>`).join("")}
           </select>
         </label>
+        <label class="f">Marca / modelo<input type="text" id="ti_marca" placeholder="Ej. Testo 608-H1"></label>
+        <label class="f">Serie / código del equipo<input type="text" id="ti_serie" placeholder="Ej. SN-123456"></label>
         <label class="f">N° de calibración<input type="text" id="ti_calibracion" placeholder="Ej. CAL-2026-014"></label>
         <label class="f">Vencimiento de calibración<input type="date" id="ti_vencimiento"></label>
-        <button class="btn btn-primary btn-sm" onclick="PuntoTemp.addInstrument()">+ Agregar instrumento</button>
+        <label class="f" style="grid-column:1/-1;">Certificado de calibración (PDF o imagen) *<input type="file" id="ti_cert" accept=".pdf,image/*"></label>
+        <button class="btn btn-primary btn-sm" onclick="PuntoTemp.addInstrument()">📤 Crear y enviar para aprobación</button>
       </div>
       <div class="table-wrap" style="margin-top:10px;">
         <table class="datatable">
-          <thead><tr><th>Tipo</th><th>Área</th><th>N° calibración</th><th>Vence</th><th>Cumplimiento (mes en curso)</th><th></th></tr></thead>
+          <thead><tr><th>Tipo</th><th>Área</th><th>Equipo</th><th>N° calibración</th><th>Vence</th><th>Estado</th><th>Cumplimiento (mes en curso)</th><th></th></tr></thead>
           <tbody>
-            ${instruments.map(i=>{
+            ${allInstruments.map(i=>{
+              const est = instEstado(i);
+              const estBadge = est==="Aprobado" ? `<span class="chip-mini chip-aprobado">Aprobado</span>` : est==="Pendiente" ? `<span class="chip-mini chip-pendiente">Pendiente de aprobación</span>` : `<span class="chip-mini chip-rechazado">Rechazado</span>${i.comentarioRevision?`<br><span style="font-size:11px;color:var(--ink-soft);">${esc(i.comentarioRevision)}</span>`:""}`;
               const comp = instrumentCompliance(i.id);
               const cal = calibrationStatus(i.fechaVencimientoCalibracion);
               let calBadge = "—";
@@ -6437,12 +6448,14 @@ function renderPuntoTemp(){
               return `<tr>
                 <td>${esc(i.tipo)}</td>
                 <td><span class="area-badge ${i.area==='Cadena de frío'?'area-frio':''}">${esc(i.area)}</span></td>
-                <td>${esc(i.numeroCalibracion)||"—"}</td>
+                <td style="font-size:12px;">${esc([i.marca,i.serie].filter(Boolean).join(" · "))||"—"}</td>
+                <td>${esc(i.numeroCalibracion)||"—"}${instTieneCert(i)?`<br><a href="#" onclick="InstrumentosGestion.verCert('${i.id}');return false;" style="font-size:11px;">📎 Ver certificado</a>`:`<br><span style="font-size:11px;color:var(--red);">Sin certificado</span>`}</td>
                 <td>${calBadge}</td>
-                <td>${comp}%</td>
-                <td><button class="btn btn-danger btn-sm" onclick="PuntoTemp.deleteInstrument('${i.id}')">Eliminar</button></td>
+                <td>${estBadge}</td>
+                <td>${est==="Aprobado"?comp+"%":"—"}</td>
+                <td>${est!=="Aprobado"?`<button class="btn btn-danger btn-sm" onclick="PuntoTemp.deleteInstrument('${i.id}')">Eliminar</button>`:""}</td>
               </tr>`;
-            }).join("") || `<tr><td colspan="6" style="color:var(--ink-soft);">Aún no has registrado instrumentos.</td></tr>`}
+            }).join("") || `<tr><td colspan="8" style="color:var(--ink-soft);">Aún no has registrado instrumentos.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -6451,7 +6464,7 @@ function renderPuntoTemp(){
     <div class="panel">
       <h3>Registro de hoy (${esc(today)})</h3>
       ${sunday ? `<p style="font-size:12.5px;color:var(--red);margin-top:0;"><strong>Hoy es domingo</strong> — igual debes registrar las 2 tomas (de forma remota si el punto no opera presencialmente).</p>` : `<p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Debes registrar <strong>2 tomas por instrumento</strong>, en el horario que prefieras, con al menos <strong>2 horas</strong> de diferencia entre ellas.</p>`}
-      ${instruments.length===0 ? `<p style="color:var(--ink-soft);">Registra al menos un instrumento arriba para poder tomar temperatura.</p>` : instruments.map(inst=>{
+      ${instruments.length===0 ? `<p style="color:var(--ink-soft);">Necesitas al menos un instrumento <strong>aprobado</strong> para poder tomar temperatura. Registra el instrumento con su certificado de calibración y espera la aprobación del supervisor.</p>` : instruments.map(inst=>{
         const readings = instrumentReadingsOnDate(inst.id, today);
         const range = tempRangeFor(inst.area);
         const toma1 = readings[0];
@@ -6549,22 +6562,148 @@ function renderPuntoTemp(){
   el.innerHTML = html;
 }
 
+
+/* ---- Control de instrumentos de medición (punto crea con certificado → supervisor aprueba → Director controla) ---- */
+const InstrumentosGestion = {
+  editId:null,
+  async adjuntarCert(inst, file){
+    const dataUri = await fileToDataUri(file);
+    inst.certNombre = file.name; inst.certDataUri = dataUri; inst.certUrl = "";
+    const m = /\.([a-zA-Z0-9]+)$/.exec(file.name||""); const ext = m?m[1].toLowerCase():"bin";
+    const url = await uploadToR2(dataUri, `instrumentos/${inst.id}/certificado_${Date.now()}.${ext}`);
+    if(url){ inst.certUrl = url; inst.certDataUri = ""; }
+  },
+  verCert(id){
+    const i = DB.instrumentos.find(x=>x.id===id); if(!i) return;
+    if(i.certUrl){ window.open(i.certUrl, "_blank"); return; }
+    if(i.certDataUri){ try{ window.open(URL.createObjectURL(dataUriToBlob(i.certDataUri)), "_blank"); }catch(_){ alert("No se pudo abrir el certificado."); } return; }
+    alert("Este instrumento no tiene certificado adjunto.");
+  },
+  puedeRevisar(i){
+    if(SESSION && SESSION.role==="admin") return true;
+    const p = DB.puntos.find(x=>x.id===i.pointId);
+    return !!(SESSION && SESSION.role==="supervisor" && p && p.supervisorId===SESSION.id);
+  },
+  html(pts, isAdmin){
+    const ids = new Set(pts.map(p=>p.id));
+    const list = DB.instrumentos.filter(i=>ids.has(i.pointId)).sort((a,b)=>{
+      const o = {Pendiente:0, Rechazado:1, Aprobado:2};
+      return (o[instEstado(a)]-o[instEstado(b)]) || String(a.pointId).localeCompare(String(b.pointId));
+    });
+    const pend = list.filter(i=>instEstado(i)==="Pendiente").length, sinCert = list.filter(i=>instAprobado(i)&&!instTieneCert(i)).length;
+    const edit = this.editId ? DB.instrumentos.find(i=>i.id===this.editId) : null;
+    return `
+    <div class="panel" ${pend?'style="border-color:var(--amber);"':''}>
+      <h3>🌡️ Instrumentos de medición ${pend?`<span class="chip-mini chip-pendiente">${pend} por aprobar</span>`:""}</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Los puntos crean sus instrumentos con el certificado de calibración y quedan pendientes. <strong>Al aprobarlos pasan a ser indicador de toma de temperatura</strong> (aparecen en la trazabilidad y habilitan las tomas).${sinCert?` <span style="color:var(--red);">${sinCert} instrumento(s) anteriores no tienen certificado cargado.</span>`:""}</p>
+      ${edit && isAdmin ? this.editHtml(edit) : ""}
+      <div class="table-wrap"><table class="datatable">
+        <thead><tr><th>Punto</th><th>Tipo / área</th><th>Equipo</th><th>Calibración</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${list.map(i=>{
+          const pt = DB.puntos.find(p=>p.id===i.pointId), est = instEstado(i), cal = calibrationStatus(i.fechaVencimientoCalibracion);
+          const calTxt = cal.status==="vencida" ? `<span class="chip-mini chip-rechazado">Vencida hace ${Math.abs(cal.dias)} d</span>` : cal.status==="proxima" ? `<span class="chip-mini chip-pendiente">Vence en ${cal.dias} d</span>` : esc(i.fechaVencimientoCalibracion||"—");
+          const estB = est==="Aprobado" ? '<span class="chip-mini chip-aprobado">Aprobado</span>' : est==="Pendiente" ? '<span class="chip-mini chip-pendiente">Pendiente</span>' : `<span class="chip-mini chip-rechazado">Rechazado</span>${i.comentarioRevision?`<br><span style="font-size:11px;color:var(--ink-soft);">${esc(i.comentarioRevision)}</span>`:""}`;
+          return `<tr>
+            <td>${esc(pt?pt.nombre:"—")}<br><span style="font-size:11px;color:var(--ink-soft);">${esc(pt?pt.codigo:"")}</span></td>
+            <td>${esc(i.tipo)}<br><span class="area-badge ${i.area==='Cadena de frío'?'area-frio':''}">${esc(i.area)}</span></td>
+            <td style="font-size:12px;">${esc([i.marca,i.serie].filter(Boolean).join(" · "))||"—"}</td>
+            <td>${esc(i.numeroCalibracion)||"—"}<br>${instTieneCert(i)?`<a href="#" onclick="InstrumentosGestion.verCert('${i.id}');return false;" style="font-size:11px;">📎 Ver certificado</a>`:`<span style="font-size:11px;color:var(--red);">Sin certificado</span>`}</td>
+            <td>${calTxt}</td><td>${estB}</td>
+            <td style="white-space:nowrap;">
+              ${est!=="Aprobado" && this.puedeRevisar(i) ? `<button class="btn btn-primary btn-sm" onclick="InstrumentosGestion.aprobar('${i.id}')">✔ Aprobar</button> <button class="btn btn-ghost btn-sm" onclick="InstrumentosGestion.rechazar('${i.id}')">✖ Rechazar</button>` : ""}
+              ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="InstrumentosGestion.abrirEdicion('${i.id}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="InstrumentosGestion.eliminar('${i.id}')">Eliminar</button>` : ""}
+            </td></tr>`;
+        }).join("") || '<tr><td colspan="7" style="color:var(--ink-soft);">No hay instrumentos registrados con este filtro.</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+  },
+  editHtml(i){
+    return `<div class="panel" style="border:2px solid var(--teal-500);">
+      <h4 style="margin-top:0;">Editar instrumento</h4>
+      <div class="inline-form">
+        <label class="f">Tipo<select id="ie_tipo"><option ${i.tipo==="Termómetro"?"selected":""}>Termómetro</option><option ${i.tipo==="Termohigrómetro"?"selected":""} value="Termohigrómetro">Termohigrómetro</option></select></label>
+        <label class="f">Área<select id="ie_area">${AREA_OPTIONS.map(a=>`<option ${i.area===a?"selected":""}>${a}</option>`).join("")}</select></label>
+        <label class="f">Marca / modelo<input type="text" id="ie_marca" value="${esc(i.marca||"")}"></label>
+        <label class="f">Serie / código<input type="text" id="ie_serie" value="${esc(i.serie||"")}"></label>
+        <label class="f">N° de calibración<input type="text" id="ie_cal" value="${esc(i.numeroCalibracion||"")}"></label>
+        <label class="f">Vencimiento<input type="date" id="ie_venc" value="${esc(i.fechaVencimientoCalibracion||"")}"></label>
+        <label class="f">Estado<select id="ie_estado">${["Pendiente","Aprobado","Rechazado"].map(e=>`<option ${instEstado(i)===e?"selected":""}>${e}</option>`).join("")}</select></label>
+        <label class="f">Reemplazar certificado (opcional)<input type="file" id="ie_cert" accept=".pdf,image/*"></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="InstrumentosGestion.guardarEdicion('${i.id}')">Guardar cambios</button><button class="btn btn-ghost btn-sm" onclick="InstrumentosGestion.editId=null;renderTemperatura()">Cancelar</button></div>
+    </div>`;
+  },
+  abrirEdicion(id){ this.editId = id; renderTemperatura(); },
+  async guardarEdicion(id){
+    const i = DB.instrumentos.find(x=>x.id===id); if(!i) return;
+    const g = x=>document.getElementById(x);
+    i.tipo = g("ie_tipo").value; i.area = g("ie_area").value; i.marca = g("ie_marca").value.trim(); i.serie = g("ie_serie").value.trim();
+    i.numeroCalibracion = g("ie_cal").value.trim(); i.fechaVencimientoCalibracion = g("ie_venc").value;
+    const est = g("ie_estado").value;
+    if(est==="Aprobado" && !instTieneCert(i) && !g("ie_cert").files[0] && i.estadoAprobacion){ if(!confirm("Este instrumento no tiene certificado. ¿Aprobarlo de todas formas?")) return; }
+    if(est!==instEstado(i)){ i.revisadoPor = (SESSION&&SESSION.nombre)||""; i.revisadoAt = new Date().toISOString(); }
+    i.estadoAprobacion = est;
+    const f = g("ie_cert").files[0];
+    if(f){ if(f.size>8*1024*1024){ alert("El certificado pesa más de 8 MB."); return; } try{ await this.adjuntarCert(i, f); }catch(_){ alert("No se pudo leer el certificado."); return; } }
+    const ok = await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos);
+    this.editId = null; if(!ok) alert("No se pudo guardar en la nube. Reintenta.");
+    renderTemperatura();
+  },
+  async aprobar(id){
+    const i = DB.instrumentos.find(x=>x.id===id); if(!i || !this.puedeRevisar(i)) return;
+    if(!instTieneCert(i)){ alert("El instrumento no tiene certificado de calibración adjunto; no se puede aprobar."); return; }
+    i.estadoAprobacion = "Aprobado"; i.comentarioRevision = ""; i.revisadoPor = (SESSION&&SESSION.nombre)||""; i.revisadoAt = new Date().toISOString();
+    await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos); renderTemperatura();
+  },
+  async rechazar(id){
+    const i = DB.instrumentos.find(x=>x.id===id); if(!i || !this.puedeRevisar(i)) return;
+    const c = prompt("Motivo del rechazo (lo verá el punto de dispensación):", ""); if(c===null) return;
+    i.estadoAprobacion = "Rechazado"; i.comentarioRevision = c.trim(); i.revisadoPor = (SESSION&&SESSION.nombre)||""; i.revisadoAt = new Date().toISOString();
+    await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos); renderTemperatura();
+  },
+  async eliminar(id){
+    if(!(SESSION && SESSION.role==="admin")) return;
+    if(!confirm("¿Eliminar este instrumento definitivamente? Las tomas de temperatura ya registradas se conservan, pero quedarán sin instrumento asociado.")) return;
+    DB.instrumentos = DB.instrumentos.filter(i=>i.id!==id);
+    await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos); renderTemperatura();
+  }
+};
+
 const PuntoTemp = {
   async addInstrument(){
     const point = DB.puntos.find(p=>p.id===activePointId());
     if(!point) return;
+    const file = document.getElementById("ti_cert").files[0];
+    const cal = document.getElementById("ti_calibracion").value.trim();
+    const venc = document.getElementById("ti_vencimiento").value;
+    if(!file){ alert("Es obligatorio adjuntar el certificado de calibración del instrumento."); return; }
+    if(!cal || !venc){ alert("Ingresa el número de calibración y la fecha de vencimiento del certificado."); return; }
+    if(!(/\.pdf$/i.test(file.name) || /^image\//.test(file.type))){ alert("El certificado debe ser un PDF o una imagen."); return; }
+    if(file.size > 8*1024*1024){ alert("El certificado pesa más de 8 MB. Sube una versión más liviana."); return; }
     const inst = blankInstrument();
     inst.pointId = point.id;
     inst.tipo = document.getElementById("ti_tipo").value;
     inst.area = document.getElementById("ti_area").value;
-    inst.numeroCalibracion = document.getElementById("ti_calibracion").value.trim();
-    inst.fechaVencimientoCalibracion = document.getElementById("ti_vencimiento").value;
+    inst.marca = document.getElementById("ti_marca").value.trim();
+    inst.serie = document.getElementById("ti_serie").value.trim();
+    inst.numeroCalibracion = cal;
+    inst.fechaVencimientoCalibracion = venc;
+    inst.estadoAprobacion = "Pendiente";
+    try{ await InstrumentosGestion.adjuntarCert(inst, file); }catch(e){ alert("No se pudo leer el certificado."); return; }
     DB.instrumentos.push(inst);
-    await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos);
+    const ok = await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos);
+    const msg = `El punto ${point.nombre} creó el instrumento ${inst.tipo} (${inst.area}) con certificado ${inst.numeroCalibracion} y espera tu aprobación.`;
+    try{
+      if(point.supervisorId) await addNotificacion({mensaje:msg, forRole:"supervisor", forSupervisorId:point.supervisorId, accion:{tipo:"temperatura"}, icono:"🌡️"});
+      else await addNotificacion({mensaje:msg, forRole:"admin", accion:{tipo:"temperatura"}, icono:"🌡️"});
+    }catch(_){}
+    alert(ok ? "Instrumento creado y enviado para aprobación del supervisor. Podrás tomar temperaturas con él cuando sea aprobado." : "No se pudo guardar en la nube. Verifica tu conexión e inténtalo de nuevo.");
     renderPuntoTemp();
   },
   async deleteInstrument(id){
-    if(!confirm("¿Eliminar este instrumento? Su historial de tomas se conservará pero quedará sin instrumento asociado visible.")) return;
+    const inst = DB.instrumentos.find(i=>i.id===id);
+    if(inst && instAprobado(inst)){ alert("Un instrumento aprobado solo puede ser eliminado por el administrador."); return; }
+    if(!confirm("¿Eliminar este instrumento?")) return;
     DB.instrumentos = DB.instrumentos.filter(i=>i.id!==id);
     await saveMaster(MASTER_KEYS.instrumentos, DB.instrumentos);
     renderPuntoTemp();
@@ -6573,6 +6712,7 @@ const PuntoTemp = {
     const point = DB.puntos.find(p=>p.id===activePointId());
     const inst = DB.instrumentos.find(i=>i.id===instrumentId);
     if(!point || !inst) return;
+    if(!instAprobado(inst)){ alert("Este instrumento aún no está aprobado por el supervisor."); return; }
     const now = new Date();
     const hora = now.toTimeString().slice(0,5); // HH:MM real, capturado en el momento
     const tempVal = document.getElementById(`tm_temp_${instrumentId}_${n}`).value;
@@ -8016,7 +8156,7 @@ function renderTemperatura(){
   const filterVal = filterSel ? filterSel.value : "";
   if(filterVal) pts = pts.filter(p=>p.id===filterVal);
   const ptIds = new Set(pts.map(p=>p.id));
-  const instruments = DB.instrumentos.filter(i=>ptIds.has(i.pointId));
+  const instruments = DB.instrumentos.filter(i=>ptIds.has(i.pointId) && instAprobado(i));
 
   const now = new Date();
   const monthSel = document.getElementById("temp_filterMonth");
@@ -8036,6 +8176,7 @@ function renderTemperatura(){
       <div class="kpi-card"><div class="kpi-num" style="color:${alertsLast7>0?'var(--red)':'var(--ink)'};">${alertsLast7}</div><div class="kpi-lbl">Alertas últimos 7 días</div></div>
     </div>
 
+    <div id="instGestionWrap">${InstrumentosGestion.html(pts, isAdmin)}</div>
     <div class="panel">
       <h3>Trazabilidad de tomas de temperatura</h3>
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Cada instrumento debe tener 2 tomas diarias, <strong>todos los días del mes, incluidos los domingos</strong> (se registran de forma remota aunque el punto no opere), con al menos 2 horas de diferencia. Verde = cumplida y en rango · Ámbar = tomada pero fuera de rango · Rojo = no se tomó.</p>
