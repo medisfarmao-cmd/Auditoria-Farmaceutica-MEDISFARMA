@@ -4753,7 +4753,7 @@ async function renderNotificaciones(){
         <h3>✏️ Solicitudes de puntos (edición y creación)</h3>
         ${solicitudesPendientes.length===0 ? `<p style="color:var(--ink-soft);font-size:13px;">No hay solicitudes pendientes.</p>` : `
         <div class="table-wrap"><table class="datatable">
-          <thead><tr><th>Punto</th><th>Supervisor</th><th>Campos</th><th></th></tr></thead>
+          <thead><tr><th>Punto</th><th>Supervisor</th><th>Cambios solicitados (anterior → nuevo)</th><th></th></tr></thead>
           <tbody>${solicitudesPendientes.map(s=>{
             const point = DB.puntos.find(p=>p.id===s.pointId);
             const nCampos = Object.keys(s.cambios||{}).length;
@@ -4761,7 +4761,7 @@ async function renderNotificaciones(){
             return `<tr>
               <td>${s.tipo==="creacion" ? "➕ Crear: "+esc(dp.nombre)+" ("+esc(dp.codigo)+")" : (point?esc(point.nombre):"(eliminado)")}</td>
               <td>${esc(supervisorNombre(s.supervisorId))}</td>
-              <td>${s.tipo==="creacion" ? "Solicitud de creación · "+esc(dp.ciudad||"")+", "+esc(dp.departamento||"")+" · "+esc(dp.tipoEstablecimiento||"") : nCampos+" campo(s) modificado(s)"}</td>
+              <td style="min-width:320px;">${s.tipo==="creacion" ? "Solicitud de creación · "+esc(dp.ciudad||"")+", "+esc(dp.departamento||"")+" · "+esc(dp.tipoEstablecimiento||"") : `<div style="font-size:11px;color:var(--ink-soft);margin-bottom:4px;">${nCampos} campo(s) modificado(s)${s.fechaSolicitud?" · "+new Date(s.fechaSolicitud).toLocaleDateString("es-CO"):""}</div>`+Object.keys(s.cambios||{}).map(k=>`<div style="font-size:12.5px;padding:3px 0;border-top:1px solid var(--line,#e5e7eb);"><strong>${esc(POINT_FIELD_LABELS[k]||k)}:</strong><br><span style="color:var(--red,#b42318);text-decoration:line-through;">${esc(formatFieldValue(k,(s.valoresAnteriores||{})[k]))}</span> <span style="color:var(--ink-soft);">→</span> <span style="color:var(--green,#4f7a17);font-weight:700;">${esc(formatFieldValue(k,s.cambios[k]))}</span></div>`).join("")}</td>
               <td style="white-space:nowrap;">
                 <button class="btn btn-primary btn-sm" onclick="PointRequests.approve('${s.id}').then(renderNotificaciones)">Aprobar</button>
                 <button class="btn btn-danger btn-sm" onclick="PointRequests.reject('${s.id}').then(renderNotificaciones)">Rechazar</button>
