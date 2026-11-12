@@ -28,46 +28,53 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 <style>
 /* Layout: banda de encabezado a color con filtros globales fijos; pestañas por tema (Resumen, Clasificación, Continuidad, Horarios, Balance, Excel); todo se recalcula con los filtros */
 :root{
-  --bg:#f3f6fb; --surface:#ffffff; --surface2:#f7f9fd; --ink:#101828; --muted:#5d6b82; --line:#e3e8f1;
-  --brand1:#0077ff; --brand2:#00c2a8; --brand-ink:#ffffff;
-  --gnral:#2f7bff; --prior:#ff3d71; --pendt:#ffaa00; --frapid:#00c2a8; --premium:#8b5cf6; --otros:#98a2b3;
-  --ok:#12b76a; --hi:#84cc16; --warn:#ffaa00; --spor:#ff7a1a; --bad:#f43f5e;
+  --bg:#f2f6fa; --surface:#ffffff; --surface2:#f7f9fd; --ink:#101828; --muted:#5d6b82; --line:#e3e8f1;
+  --brand1:#005898; --brand2:#85c226; --brand-ink:#ffffff; --navy:#003a63;
+  --gnral:#1479c2; --prior:#e5484d; --pendt:#f5a524; --frapid:#85c226; --premium:#7c5cd6; --otros:#98a2b3;
+  --ok:#2f9e44; --hi:#85c226; --warn:#f5a524; --spor:#ef7d1a; --bad:#e5484d;
   --heat0:#edf1f7; --heatoff:#dfe5ee; --shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.06);
   --f-display:"Outfit",system-ui,sans-serif; --f-body:"Nunito Sans",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0b1220; --surface:#131c2e; --surface2:#18233a; --ink:#e8eefb; --muted:#9aa8c2; --line:#25324b;
-  --brand1:#2f8bff; --brand2:#14d1b6; --brand-ink:#ffffff;
-  --gnral:#5b9bff; --prior:#ff5d8a; --pendt:#ffbd3a; --frapid:#25dcc2; --premium:#a585ff; --otros:#7d8aa3;
-  --ok:#2fd487; --hi:#a3e635; --warn:#ffbd3a; --spor:#ff9147; --bad:#ff5c79;
+  --brand1:#4da3dd; --brand2:#a3d558; --brand-ink:#ffffff; --navy:#003a63;
+  --gnral:#4da3dd; --prior:#ff6b6f; --pendt:#ffbd3a; --frapid:#a3d558; --premium:#a585ff; --otros:#7d8aa3;
+  --ok:#52c26a; --hi:#a3d558; --warn:#ffbd3a; --spor:#ff9147; --bad:#ff6b6f;
   --heat0:#1a2539; --heatoff:#212d45; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0b1220; --surface:#131c2e; --surface2:#18233a; --ink:#e8eefb; --muted:#9aa8c2; --line:#25324b;
-  --brand1:#2f8bff; --brand2:#14d1b6; --brand-ink:#ffffff;
-  --gnral:#5b9bff; --prior:#ff5d8a; --pendt:#ffbd3a; --frapid:#25dcc2; --premium:#a585ff; --otros:#7d8aa3;
-  --ok:#2fd487; --hi:#a3e635; --warn:#ffbd3a; --spor:#ff9147; --bad:#ff5c79;
+  --brand1:#4da3dd; --brand2:#a3d558; --brand-ink:#ffffff; --navy:#003a63;
+  --gnral:#4da3dd; --prior:#ff6b6f; --pendt:#ffbd3a; --frapid:#a3d558; --premium:#a585ff; --otros:#7d8aa3;
+  --ok:#52c26a; --hi:#a3d558; --warn:#ffbd3a; --spor:#ff9147; --bad:#ff6b6f;
   --heat0:#1a2539; --heatoff:#212d45; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 @media (max-width:700px){.bar{position:static}}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--brand1)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:#003a63}
 .gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .in{max-width:1280px;margin:0 auto}
 h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
 .num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 
 /* hero */
-.hero{background:linear-gradient(120deg,var(--brand1) 0%,#0aa2d8 55%,var(--brand2) 100%);color:var(--brand-ink);padding-block:26px 64px;position:relative;overflow:hidden}
+.hero{background:linear-gradient(120deg,#003a63 0%,#00467d 45%,#005898 78%,#1479c2 100%);color:var(--brand-ink);padding-block:12px 44px;position:relative;overflow:hidden;border-bottom:4px solid #85c226}
 .hero::after{content:"";position:absolute;right:-80px;top:-120px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.22),transparent 65%);pointer-events:none}
 .hero .eb{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
-.hero h1{font-size:clamp(1.7rem,3.6vw,2.6rem);font-weight:800;letter-spacing:-.015em;margin-top:4px}
+.hero h1{font-size:clamp(1.15rem,2.4vw,1.5rem);font-weight:800;letter-spacing:-.01em;margin:0}
+.hrow{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.hrow .chips{margin-top:6px!important}
+.hact{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hact .up{margin:0}
+.hero .upbtn{padding:7px 12px;font-size:.85rem}
+.tbtn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:.85rem;padding:7px 13px;border-radius:12px;border:1.5px solid #85c226;color:#fff;background:rgba(133,194,38,.18)}
+.tbtn:hover{background:rgba(133,194,38,.38)}
 .hero p{max-width:78ch;margin:8px 0 0;opacity:.92}
 .hero .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .hero .chips span{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);padding:3px 12px;border-radius:999px;font-size:.82rem;font-weight:600}
 
 /* sticky toolbar */
-.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin-top:-40px;padding-block:0 6px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin-top:-34px;padding-block:0 6px}
 .bar .in{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px;display:grid;gap:10px}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .filters label{font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
@@ -163,14 +170,14 @@ td.num,th.num{text-align:right}
 .xl .xi{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;background:var(--x);font-family:var(--f-mono);font-weight:700;font-size:.75rem}
 .xl b{font-family:var(--f-display);font-size:1rem;display:block}
 .xl span{color:var(--muted);font-size:.84rem}
-.xl button.all{background:linear-gradient(120deg,#12b76a,#0aa27a);color:#fff;border-color:transparent}
+.xl button.all{background:linear-gradient(120deg,#005898,#2f9e44);color:#fff;border-color:transparent}
 .xl button.all span{color:#fff;opacity:.9}
 .xl button.all .xi{background:rgba(255,255,255,.22)}
 .note{font-size:.84rem;color:var(--muted)}
 .up{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px}
 .upbtn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:.95rem;padding:10px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,.55);color:#fff;background:rgba(255,255,255,.12);transition:background .2s,transform .2s}
 .upbtn:hover{background:rgba(255,255,255,.24);transform:translateY(-1px)}
-.upbtn.main{background:#fff;color:#0062d6;border-color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+.upbtn.main{background:#fff;color:#005898;border-color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .upbtn.main:hover{background:#eef6ff}
 .upbtn:focus-within{outline:3px solid rgba(255,255,255,.7);outline-offset:2px}
 .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;width:100%}
@@ -224,21 +231,34 @@ td.num,th.num{text-align:right}
 button:focus-visible,select:focus-visible,input:focus-visible,th:focus-visible{outline:3px solid color-mix(in srgb,var(--brand1) 55%,transparent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .ro .upbtn,.ro .uphint,.ro .fchip button{display:none!important}.roinfo{font-size:.85rem;opacity:.95}
+
+.kpi small{color:var(--muted);font-size:.78rem;line-height:1.3}
+.hb{display:grid;gap:7px}
+.hb .r{display:grid;grid-template-columns:minmax(120px,210px) 1fr 64px;gap:10px;align-items:center;font-size:.86rem}
+.hb .r .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .r .bar2{height:14px;border-radius:7px;background:var(--heat0);overflow:hidden}
+.hb .r .bar2 i{display:block;height:100%;border-radius:7px}
+.tt{width:100%;font-size:.88rem}.tt td,.tt th{padding:9px 10px}.tt th{position:static;cursor:default;white-space:normal;line-height:1.25;text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:.78rem;vertical-align:bottom}
+.tt tfoot td{font-weight:800;border-top:2px solid var(--line);border-bottom:0}
+.tt .w-bad{color:var(--bad);font-weight:700}.tt .w-spor{color:var(--spor);font-weight:700}.tt .w-ok{color:var(--ok);font-weight:700}
+.lsvg{width:100%;height:auto;display:block}.lsvg text{fill:var(--muted);font-family:var(--f-mono);font-size:10px}
 </style>
 </head><body style="margin:0"><header class="hero gut"><div class="in">
-  <div class="eb">MEDISFARMA · Dirección Operativa</div>
-  <h1>Balance de generación de turnos</h1>
-  <p>Puntos de dispensación <b>operando con habilitación</b> según el diagnóstico de droguerías, cruzados con el reporte de turnos. Se excluyen las bodegas del departamento AAA y los centros logísticos sin comprobante de dispensación.</p>
-  <div class="chips" id="chips"></div>
-  <div class="up">
-    <label class="upbtn main" for="inTurnos"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Cargar reporte de turnos</label>
-    <input type="file" id="inTurnos" accept=".csv,.txt,.xlsx,.xls" multiple hidden>
-    <label class="upbtn" for="inDiag"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Actualizar diagnóstico</label>
-    <input type="file" id="inDiag" accept=".xlsx,.xls" hidden>
-    <span class="uphint">CSV separado por “|” o Excel del reporte de turnos (el ERP entrega máx. 30 días). Cargue el reporte de cada mes: <b>queda guardado</b> para que los supervisores lo consulten y la aplicación los une por fecha (los días repetidos no se duplican). También puede arrastrar los archivos a la página.</span><span class="roinfo" id="roInfo" hidden></span>
-    <div class="fchips" id="fchips"></div>
+  <div class="hrow">
+    <div class="htitle"><h1>Balance de generación de turnos</h1><div class="chips" id="chips"></div></div>
+    <div class="hact">
+      <div class="up">
+        <label class="upbtn main" for="inTurnos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Cargar reporte</label>
+        <input type="file" id="inTurnos" accept=".csv,.txt,.xlsx,.xls" multiple hidden>
+        <label class="upbtn" for="inDiag"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>Diagnóstico</label>
+        <input type="file" id="inDiag" accept=".xlsx,.xls" hidden>
+      </div>
+      <button class="tbtn" id="themeBtn" type="button" aria-label="Cambiar tema claro u oscuro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>Tema</button>
+    </div>
   </div>
-</div></div></header>
+  <div class="fchips" id="fchips"></div>
+</div></header>
+
 
 <div class="bar gut"><div class="in">
   <div class="filters">
@@ -264,11 +284,23 @@ button:focus-visible,select:focus-visible,input:focus-visible,th:focus-visible{o
     <div class="legend" id="slegend"></div>
   </div>
   <div class="ctiles" id="ctiles"></div>
+  <div class="kpis" id="kpis2"></div>
+  <div class="card" id="cTipo"><h3 id="cTipoT">Turnos por tipo</h3><div class="tbl-box" style="margin-top:10px"><table class="tt" id="tTipo"></table></div><p class="note" id="tTipoN" style="margin:10px 0 0"></p></div>
+  <div class="card chart"><h3>Tiempo de espera y de atención por día (promedio, minutos)</h3><p class="sub">Sin domingos ni festivos</p><div id="chWD"></div></div>
+  <div class="row">
+    <div class="card chart"><h3>Espera promedio por hora de ingreso</h3><p class="sub">Minutos de espera según la hora en que se genera el turno</p><div id="chWH"></div></div>
+    <div class="card chart"><h3>Distribución del tiempo de espera</h3><p class="sub">% de turnos según los minutos esperados</p><div id="chWDist"></div></div>
+  </div>
+  <div class="card"><h3>Puntos con mayor espera mediana</h3><p class="sub">Top 10 (puntos con 50 o más turnos en el periodo)</p><div class="hb" id="hbTop"></div></div>
+</section>
+
+<section class="view" id="v-hallazgos" role="tabpanel" hidden>
   <div class="card">
     <h3>Hallazgos de la red</h3><p class="sub" id="findSub"></p>
     <ul class="findings" id="findings"></ul>
   </div>
 </section>
+
 
 <section class="view" id="v-clasif" role="tabpanel" hidden>
   <div class="ctiles" id="ctiles2"></div>
@@ -448,12 +480,13 @@ function analyze(recs,diag,meta){
     periodo:dates[0].split('-').reverse().join('/')+' – '+dates[nD-1].split('-').reverse().join('/'),holidays:dates.filter((d,i)=>dtype[i]==='N'&&new Date(d+'T00:00:00Z').getUTCDay()!==0),
     fileName:(meta&&meta.fileName)||'',diagName:(meta&&meta.diagName)||'',records:recs.length,badRows:(meta&&meta.bad)||0,unmatched}};
 }
-return {code,holidays,diagFromSheetRows,operating,recordsFromRows,parseDelimited,analyze,CLASSES};
+return {code,holidays,diagFromSheetRows,operating,recordsFromRows,parseDelimited,analyze,CLASSES,classOf};
 })();
 if(typeof module!=='undefined')module.exports=Engine;
 
 let D,G,P,HRS=[],RECS=null,DIAG=window.__DIAG__,META={};
 /* rol / usuario (los pasa index.html por la URL). Sin parámetros (uso directo) = Director. */
+(function(){let t=null;try{t=localStorage.getItem('medis_turnos_theme')}catch(e){}if(t)document.documentElement.setAttribute('data-theme',t)})();
 const QS=new URLSearchParams(location.search),ROL=QS.get('rol'),IS_DIR=!ROL||ROL==='director',UID=QS.get('uid')||'anon',SUPN=QS.get('sup')||'';
 if(!IS_DIR)document.documentElement.classList.add('ro');
 const ST=(()=>{try{return window.parent!==window&&window.parent.TurnosStore||null}catch(e){return null}})();
@@ -492,7 +525,7 @@ function agg(ps){
 }
 
 /* ---------- tabs ---------- */
-const TABS=[['resumen','Resumen'],['clasif','Clasificación'],['cont','Continuidad'],['horas','Horarios'],['sup','Supervisores'],['balance','Balance por punto'],['excel','Reportes Excel']];
+const TABS=[['resumen','Resumen'],['clasif','Clasificación'],['cont','Continuidad'],['horas','Horarios'],['sup','Supervisores'],['balance','Balance por punto'],['excel','Reportes Excel'],['hallazgos','Hallazgos de la red']];
 $('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" id="t-${k}" aria-controls="v-${k}" aria-selected="false">${l}</button>`).join('');
 let cur='resumen';
 function show(k){if(!TABS.some(t=>t[0]===k))k='resumen';cur=k;TABS.forEach(([t])=>{$('#v-'+t).hidden=t!==k;$('#t-'+t).setAttribute('aria-selected',t===k)});try{history.replaceState(null,'','#'+k)}catch(e){}render()}
@@ -557,6 +590,80 @@ function vResumen(ps,a){
   $('#sbar').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#fEst').value=$('#fEst').value===b.dataset.e?'':b.dataset.e;render()});
   $('#slegend').innerHTML=EST.map(([e,c])=>`<span><i style="background:var(${c})"></i>${e} · <b class="num">${cnt(e)}</b></span>`).join('');
   tiles($('#ctiles'),ps,a);
+  resumenWait(ps);
+}
+/* ---------- métricas de espera / atención (a partir del archivo cargado) ---------- */
+const fmtMin=m=>m==null||isNaN(m)?'—':m>=60?`${Math.floor(m/60)} h ${Math.round(m%60)} min`:`${Math.round(m)} min`;
+const wcls=m=>m==null?'':m>=45?'w-bad':m>=20?'w-spor':'w-ok';
+function waitStats(ps){
+  if(!RECS||!G||!RECS.length)return null;
+  const ks=new Set(ps.map(p=>p.key)),di={};G.dates.forEach((d,i)=>di[d]=i);
+  const l10=new Set(G.dates.slice(-10));
+  const C=CLS.map(()=>({n:0,nH:0,eS:0,eN:0,aS:0,aN:0,e10:[]})),all10=[];
+  const day=G.dates.map(()=>({es:0,en:0,as:0,an:0,n:0})),hr=Array.from({length:24},()=>({es:0,en:0})),dist=[0,0,0,0,0,0];let nEsp=0;
+  for(const r of RECS){
+    if(!ks.has(r.key))continue;const i=di[r.f];if(i==null)continue;const t=G.dtype[i],o=C[Engine.classOf(r.ab)];
+    o.n++;if(t==='H')o.nH++;if(t==='N')continue;day[i].n++;
+    const e=r.esp/60,a=r.ate/60;
+    if(!isNaN(e)){o.eS+=e;o.eN++;day[i].es+=e;day[i].en++;nEsp++;
+      if(l10.has(r.f)){o.e10.push(e);all10.push(e)}
+      if(!isNaN(r.h)){const h=Math.floor(r.h/3600);if(h>=0&&h<24){hr[h].es+=e;hr[h].en++}}
+      dist[e<=5?0:e<=15?1:e<=30?2:e<=60?3:e<=120?4:5]++}
+    if(!isNaN(a)){o.aS+=a;o.aN++;day[i].as+=a;day[i].an++}
+  }
+  const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null,medN=a=>{if(!a.length)return null;const v=a.slice().sort((x,y)=>x-y),m=v.length>>1;return v.length%2?v[m]:(v[m-1]+v[m])/2};
+  const rows=C.map((o,k)=>({k,n:o.n,nH:o.nH,e10:mean(o.e10),m10:medN(o.e10),eAll:o.eN?o.eS/o.eN:null,aAll:o.aN?o.aS/o.aN:null}));
+  const sE=C.reduce((s,o)=>s+o.eS,0),nE=C.reduce((s,o)=>s+o.eN,0),sA=C.reduce((s,o)=>s+o.aS,0),nA=C.reduce((s,o)=>s+o.aN,0);
+  const T={n:C.reduce((s,o)=>s+o.n,0),nH:C.reduce((s,o)=>s+o.nH,0),e10:mean(all10),m10:medN(all10),eAll:nE?sE/nE:null,aAll:nA?sA/nA:null};
+  const nonN=G.dtype.map((t,i)=>t!=='N'?i:-1).filter(i=>i>=0),days=nonN.filter(i=>day[i].n>0).length,nNN=nonN.reduce((s,i)=>s+day[i].n,0);
+  return {rows,T,day,hr,dist,nEsp,days,nonN,d10:G.dates.slice(-10),
+    perDay:days?nNN/days:0,nNN,perHab:G.nhab?T.nH/G.nhab:0,over30:nEsp?100*(dist[3]+dist[4]+dist[5])/nEsp:0};
+}
+function lineSvg(el,labels,series,every){
+  const W=1000,H=300,L=62,R=14,T=12,B=42,n=labels.length;
+  if(!n){el.innerHTML='<p class="note">Sin datos para el filtro</p>';return}
+  const mx=Math.max(1,...series.flatMap(s=>s.data.filter(v=>v!=null))),step=Math.pow(10,Math.floor(Math.log10(mx))),ts=[1,2,2.5,5,10].map(m=>m*step).find(q=>mx/q<=5),top=Math.ceil(mx/ts)*ts;
+  const x=i=>L+(W-L-R)*(n>1?i/(n-1):.5),y=v=>T+(H-T-B)*(1-v/top);
+  let o=`<svg class="lsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de líneas">`;
+  for(let v=0;v<=top+1e-9;v+=ts)o+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v?'3 3':''}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${fmt(v)} min</text>`;
+  labels.forEach((lb,i)=>{if(i%every===0)o+=`<text x="${x(i)}" y="${H-B+16}" text-anchor="middle">${lb}</text>`});
+  series.forEach(se=>{let d='',pen=false;se.data.forEach((v,i)=>{if(v==null){pen=false;return}d+=(pen?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)+' ';pen=true});
+    o+=`<path d="${d}" fill="none" stroke="var(${se.color})" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    se.data.forEach((v,i)=>{if(v!=null)o+=`<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(${se.color})" data-tip="<b>${labels[i]}</b><br>${se.name}: ${v.toFixed(1).replace('.',',')} min"/>`})});
+  let lx=L;series.forEach(se=>{o+=`<circle cx="${lx+5}" cy="${H-8}" r="5" fill="var(${se.color})"/><text x="${lx+15}" y="${H-4}" style="fill:var(--ink)">${se.name}</text>`;lx+=110});
+  el.innerHTML=o+'</svg>'}
+function barsSvg(el,labels,vals,color,unit,fmtv){
+  const W=520,H=240,L=44,R=8,T=14,B=38,n=labels.length;fmtv=fmtv||(v=>v.toFixed(1).replace('.',','));
+  if(!n){el.innerHTML='<p class="note">Sin datos para el filtro</p>';return}
+  const mx=Math.max(1e-9,...vals),step=Math.pow(10,Math.floor(Math.log10(mx))),ts=[1,2,2.5,5,10].map(m=>m*step).find(q=>mx/q<=5),top=Math.ceil(mx/ts)*ts;
+  const y=v=>T+(H-T-B)*(1-v/top),bw=(W-L-R)/n;
+  let o=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de barras">`;
+  for(let v=0;v<=top+1e-9;v+=ts)o+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v?'3 3':''}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${fmt(Math.round(v*10)/10)}</text>`;
+  labels.forEach((lb,i)=>{const bx=L+i*bw+bw*.14,w=bw*.72,v=vals[i]||0;o+=`<rect class="b" x="${bx}" y="${y(v)}" width="${w}" height="${Math.max(0,y(0)-y(v))}" rx="3" fill="var(${color})" data-tip="<b>${lb}</b><br>${fmtv(v)} ${unit}"/><text x="${bx+w/2}" y="${H-B+14}" text-anchor="middle">${lb}</text>`});
+  el.innerHTML=o+'</svg>'}
+function resumenWait(ps){
+  const W=waitStats(ps),hideIds=['chWD','chWH','chWDist','hbTop'];
+  if(!W){$('#kpis2').innerHTML='<div class="card" style="grid-column:1/-1"><p class="note" style="margin:0">Los tiempos de espera y atención se calculan con el reporte de turnos cargado por la Dirección.</p></div>';$('#cTipo').hidden=true;hideIds.forEach(i=>$('#'+i).closest('.card').hidden=true);return}
+  $('#cTipo').hidden=false;hideIds.forEach(i=>$('#'+i).closest('.card').hidden=false);
+  const T=W.T,d10=W.d10;
+  $('#kpis2').innerHTML=[
+    [fmt(Math.round(W.perDay)),'Turnos promedio por día',`${fmt(W.nNN)} turnos en ${W.days} días · ${fmt(Math.round(W.perHab))} por día hábil`,'--brand1','cal'],
+    [fmtMin(T.e10),'Espera promedio · últimos 10 días',`Mediana ${fmtMin(T.m10)} · periodo completo ${fmtMin(T.eAll)}`,'--spor','clk'],
+    [fmtMin(T.aAll),'Atención promedio','Tiempo de atención por turno finalizado','--ok','ok'],
+    [pcs(W.over30),'Turnos con espera mayor a 30 min','Sobre los turnos con tiempo de espera registrado','--bad','warn']
+  ].map(([v,l,sub,c,i])=>`<div class="kpi" style="--k:var(${c})"><div class="ic">${ICON[i]}</div><b>${v}</b><span>${l}</span><small>${sub}</small></div>`).join('');
+  $('#cTipoT').textContent=`Turnos por tipo · ${G.periodo}`;
+  const H=['Tipo de turno','Turnos del periodo','% del periodo','Prom. por día hábil','Espera promedio · últimos 10 días','Espera mediana · últimos 10 días','Espera prom. periodo completo','Atención promedio'];
+  $('#tTipo').innerHTML='<thead><tr>'+H.map((h,i)=>`<th class="${i?'num':''}">${h}</th>`).join('')+'</tr></thead><tbody>'+
+    W.rows.map(q=>{const c=CLS[q.k];return `<tr><td><b>${c[1]}</b> <span class="ab" style="--c:var(${c[3]})">${c[2]}</span></td><td class="num">${fmt(q.n)}</td><td class="num">${pcs(pc(q.n,T.n))}</td><td class="num">${G.nhab?fmt(Math.round(q.nH/G.nhab)):'—'}</td><td class="num ${wcls(q.e10)}">${fmtMin(q.e10)}</td><td class="num">${fmtMin(q.m10)}</td><td class="num">${fmtMin(q.eAll)}</td><td class="num">${fmtMin(q.aAll)}</td></tr>`}).join('')+
+    `</tbody><tfoot><tr><td>Total</td><td class="num">${fmt(T.n)}</td><td class="num">100 %</td><td class="num">${fmt(Math.round(W.perHab))}</td><td class="num ${wcls(T.e10)}">${fmtMin(T.e10)}</td><td class="num">${fmtMin(T.m10)}</td><td class="num">${fmtMin(T.eAll)}</td><td class="num">${fmtMin(T.aAll)}</td></tr></tfoot>`;
+  $('#tTipoN').textContent=`Clasificación por la abreviatura del turno (GNRAL-1, PRIOR-1…). Espera: últimos 10 días del periodo (${dmy(d10[0])} – ${dmy(d10[d10.length-1])}) y periodo completo. Sin domingos ni festivos.`;
+  const idx=W.nonN,lab=idx.map(i=>dLab(G.dates[i]));
+  lineSvg($('#chWD'),lab,[{name:'Espera',color:'--bad',data:idx.map(i=>W.day[i].en?W.day[i].es/W.day[i].en:null)},{name:'Atención',color:'--ok',data:idx.map(i=>W.day[i].an?W.day[i].as/W.day[i].an:null)}],Math.max(1,Math.ceil(idx.length/14)));
+  const hs=HRS.filter(h=>W.hr[h].en);barsSvg($('#chWH'),hs.map(h=>String(h).padStart(2,'0')+':00'),hs.map(h=>W.hr[h].es/W.hr[h].en),'--brand1','min de espera promedio');
+  barsSvg($('#chWDist'),['≤ 5 min','5–15','15–30','30–60','1–2 h','> 2 h'],W.dist.map(v=>W.nEsp?100*v/W.nEsp:0),'--brand2','',v=>v.toFixed(1).replace('.',',')+' % de los turnos');
+  const top=ps.filter(p=>p.tot>=50&&p.esp!=null).sort((x,y)=>y.esp-x.esp).slice(0,10),mx=Math.max(1,...top.map(p=>p.esp));
+  $('#hbTop').innerHTML=top.map(p=>`<div class="r"><span class="t" title="${p.nombre}">${p.bod} ${cap(p.mun.trim())}</span><div class="bar2"><i style="width:${p.esp/mx*100}%;background:var(${p.esp>=45?'--bad':p.esp>=20?'--spor':'--ok'})"></i></div><b class="num">${fmtMin(p.esp)}</b></div>`).join('')||'<p class="note">Sin puntos con suficientes turnos</p>';
 }
 let unit='n',clsSort={k:'tot',d:-1};
 function vClasif(ps,a){
@@ -653,7 +760,7 @@ $('#xl-all').onclick=async()=>{if(!window.XLSX)return toast('La librería de Exc
   catch(e){console.warn('Dashboard con gráficas no disponible',e);busy(false);const wb=build(XL.map(x=>x[0]));const ps=F();const rows=[];dashTables(ps).forEach(([t,r])=>{rows.push([t]);if(r.length){rows.push(Object.keys(r[0]));r.forEach(o=>rows.push(Object.values(o)))}rows.push([])});const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:34},{wch:18},{wch:18},{wch:18},{wch:18},{wch:18},{wch:18}];XLSX.utils.book_append_sheet(wb,ws,'Dashboard');wb.SheetNames.unshift(wb.SheetNames.pop());await save(wb,name);toast('Libro generado SIN gráficas (no se pudo cargar el componente de gráficos; revise la conexión).')}};
 
 /* ---------- Hoja Dashboard del libro completo (gráficas según el filtro aplicado) ---------- */
-const LC={'--gnral':'#2f7bff','--prior':'#ff3d71','--pendt':'#ffaa00','--frapid':'#00c2a8','--premium':'#8b5cf6','--otros':'#98a2b3','--ok':'#12b76a','--hi':'#84cc16','--warn':'#ffaa00','--spor':'#ff7a1a','--bad':'#f43f5e','--brand1':'#0077ff'};
+const LC={'--gnral':'#1479c2','--prior':'#e5484d','--pendt':'#f5a524','--frapid':'#85c226','--premium':'#7c5cd6','--otros':'#98a2b3','--ok':'#2f9e44','--hi':'#85c226','--warn':'#f5a524','--spor':'#ef7d1a','--bad':'#e5484d','--brand1':'#005898'};
 const FNT='"Segoe UI",Arial,sans-serif',nice=v=>{if(v<=0)return 1;const e=Math.pow(10,Math.floor(Math.log10(v))),m=v/e;return (m<=1?1:m<=2?2:m<=5?5:10)*e};
 function mkC(w,h){const c=document.createElement('canvas');c.width=w*2;c.height=h*2;const x=c.getContext('2d');x.scale(2,2);x.fillStyle='#fff';x.fillRect(0,0,w,h);x.textBaseline='middle';return {c,x,w,h}}
 function cTitle(x,t,sub){x.fillStyle='#101828';x.font=`700 15px ${FNT}`;x.textAlign='left';x.fillText(t,16,20);if(sub){x.fillStyle='#667085';x.font=`12px ${FNT}`;x.fillText(sub,16,39)}}
@@ -741,6 +848,7 @@ async function buildFullBook(){
     row++});
   wb.views=[{activeTab:0}];
   return await wb.xlsx.writeBuffer()}
+$('#themeBtn').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'),n=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('medis_turnos_theme',n)}catch(e){}};
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,5000)}
 
 /* ---------- render ---------- */
@@ -749,7 +857,7 @@ function render(){
   const act=['#fDep','#fEst','#fTur','#fSup'].filter(s=>$(s).value).length+($('#fQ').value.trim()?1:0)+((DF.d0||DF.d1)?1:0);saveF();
   $('#fstate').innerHTML=act?`<b>${ps.length}</b> de ${P.length} puntos · <b>${fmt(a.tot)}</b> turnos`:`<b>${P.length}</b> puntos · <b>${fmt(a.tot)}</b> turnos`;
   $('#clear').hidden=!act;
-  ({resumen:()=>vResumen(ps,a),clasif:()=>vClasif(ps,a),cont:()=>vCont(ps),horas:()=>vHoras(ps,a),balance:()=>vBalance(ps),sup:()=>vSup(ps),excel:()=>{}})[cur]();
+  ({resumen:()=>vResumen(ps,a),clasif:()=>vClasif(ps,a),cont:()=>vCont(ps),horas:()=>vHoras(ps,a),balance:()=>vBalance(ps),sup:()=>vSup(ps),excel:()=>{},hallazgos:()=>{}})[cur]();
 }
 ['#fDep','#fEst','#fTur','#fSup'].forEach(s=>$(s).addEventListener('change',render));
 $('#fQ').addEventListener('input',render);
@@ -800,7 +908,7 @@ function setData(data,keepTab){
   rs('#fDep','dep');rs('#fEst','est');rs('#fSup','sup');rs('#fTur','tur');$('#fQ').value=(FS&&FS.q)||'';
   if(!FS&&!NODEF&&SUPN&&!IS_DIR){const m=matchSup(SUPN,[...$('#fSup').options].map(o=>o.value).filter(Boolean));if(m)$('#fSup').value=m}
   const hol=(G.holidays||[]).map(d=>d.slice(8,10)+'/'+d.slice(5,7));
-  $('#chips').innerHTML=[`Corte ${G.periodo}`,`${G.nhab} días hábiles${hol.length?' · festivo'+(hol.length>1?'s ':' ')+hol.join(', ')+' excluido'+(hol.length>1?'s':''):''}`,`${G.nsab} sábado${G.nsab===1?'':'s'}`,`${P.length} puntos evaluados`,G.fileName?`Archivo: ${G.fileName}`:''].filter(Boolean).map(t=>`<span>${t}</span>`).join('');
+  {const fr=FILES.length?bounds():[G.dates[0],G.dates[G.dates.length-1]];$('#chips').innerHTML=`<span>Fechas disponibles: ${dmy(fr[0])} – ${dmy(fr[1])}</span>`}
   findings();
   show(keepTab?cur:((location.hash||'').slice(1)));
   inSet=false;
