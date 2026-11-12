@@ -288,7 +288,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,th:focus-visible{o
   <div class="card" id="cTipo"><h3 id="cTipoT">Turnos por tipo</h3><div class="tbl-box" style="margin-top:10px"><table class="tt" id="tTipo"></table></div><p class="note" id="tTipoN" style="margin:10px 0 0"></p></div>
   <div class="card chart"><h3>Tiempo de espera y de atención por día (promedio, minutos)</h3><p class="sub">Sin domingos ni festivos</p><div id="chWD"></div></div>
   <div class="row">
-    <div class="card chart"><h3>Espera promedio por hora de ingreso</h3><p class="sub">Minutos de espera según la hora en que se genera el turno</p><div id="chWH"></div></div>
+    <div class="card chart"><div class="head"><div><h3>Espera por hora de ingreso del turno</h3><p class="sub" id="whSub"></p></div><div class="seg" role="group" aria-label="Medida"><button id="whM" aria-pressed="true">Mediana</button><button id="whA" aria-pressed="false">Promedio</button></div></div><div id="chWH"></div><p class="note" id="whN" style="margin:6px 0 0"></p></div>
     <div class="card chart"><h3>Distribución del tiempo de espera</h3><p class="sub">% de turnos según los minutos esperados</p><div id="chWDist"></div></div>
   </div>
   <div class="card"><h3>Puntos con mayor espera mediana</h3><p class="sub">Top 10 (puntos con 50 o más turnos en el periodo)</p><div class="hb" id="hbTop"></div></div>
@@ -600,14 +600,14 @@ function waitStats(ps){
   const ks=new Set(ps.map(p=>p.key)),di={};G.dates.forEach((d,i)=>di[d]=i);
   const l10=new Set(G.dates.slice(-10));
   const C=CLS.map(()=>({n:0,nH:0,eS:0,eN:0,aS:0,aN:0,e10:[]})),all10=[];
-  const day=G.dates.map(()=>({es:0,en:0,as:0,an:0,n:0})),hr=Array.from({length:24},()=>({es:0,en:0})),dist=[0,0,0,0,0,0];let nEsp=0;
+  const day=G.dates.map(()=>({es:0,en:0,as:0,an:0,n:0})),hr=Array.from({length:24},()=>({es:0,en:0,v:[]})),dist=[0,0,0,0,0,0];let nEsp=0;
   for(const r of RECS){
     if(!ks.has(r.key))continue;const i=di[r.f];if(i==null)continue;const t=G.dtype[i],o=C[Engine.classOf(r.ab)];
     o.n++;if(t==='H')o.nH++;if(t==='N')continue;day[i].n++;
     const e=r.esp/60,a=r.ate/60;
     if(!isNaN(e)){o.eS+=e;o.eN++;day[i].es+=e;day[i].en++;nEsp++;
       if(l10.has(r.f)){o.e10.push(e);all10.push(e)}
-      if(!isNaN(r.h)){const h=Math.floor(r.h/3600);if(h>=0&&h<24){hr[h].es+=e;hr[h].en++}}
+      if(!isNaN(r.h)){const h=Math.floor(r.h/3600);if(h>=0&&h<24){hr[h].es+=e;hr[h].en++;hr[h].v.push(e)}}
       dist[e<=5?0:e<=15?1:e<=30?2:e<=60?3:e<=120?4:5]++}
     if(!isNaN(a)){o.aS+=a;o.aN++;day[i].as+=a;day[i].an++}
   }
@@ -641,6 +641,25 @@ function barsSvg(el,labels,vals,color,unit,fmtv){
   for(let v=0;v<=top+1e-9;v+=ts)o+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v?'3 3':''}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${fmt(Math.round(v*10)/10)}</text>`;
   labels.forEach((lb,i)=>{const bx=L+i*bw+bw*.14,w=bw*.72,v=vals[i]||0;o+=`<rect class="b" x="${bx}" y="${y(v)}" width="${w}" height="${Math.max(0,y(0)-y(v))}" rx="3" fill="var(${color})" data-tip="<b>${lb}</b><br>${fmtv(v)} ${unit}"/><text x="${bx+w/2}" y="${H-B+14}" text-anchor="middle">${lb}</text>`});
   el.innerHTML=o+'</svg>'}
+
+let whMode='med';const MINH=30;
+function hourBars(W){
+  const med=a=>{const v=a.slice().sort((x,y)=>x-y),m=v.length>>1;return v.length%2?v[m]:(v[m-1]+v[m])/2};
+  const H=[...Array(24).keys()].filter(h=>W.hr[h].en>=MINH),om=[...Array(24).keys()].filter(h=>W.hr[h].en>0&&W.hr[h].en<MINH);
+  const val=h=>whMode==='med'?med(W.hr[h].v):W.hr[h].es/W.hr[h].en;
+  $('#whSub').textContent=`Hora en que se genera el turno (reloj de 24 h: 13:00 = 1:00 p. m.). ${whMode==='med'?'Mediana':'Promedio'} de minutos de espera por franja.`;
+  $('#whM').setAttribute('aria-pressed',whMode==='med');$('#whA').setAttribute('aria-pressed',whMode!=='med');
+  const el=$('#chWH');if(!H.length){el.innerHTML='<p class="note">Sin datos para el filtro</p>';return}
+  const vals=H.map(val),Wd=520,Ht=270,L=44,R=8,T=14,B=62,n=H.length,mx=Math.max(1e-9,...vals),step=Math.pow(10,Math.floor(Math.log10(mx))),ts=[1,2,2.5,5,10].map(m=>m*step).find(q=>mx/q<=5),top=Math.ceil(mx/ts)*ts,y=v=>T+(Ht-T-B)*(1-v/top),bw=(Wd-L-R)/n;
+  let o=`<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Espera por hora de ingreso">`;
+  for(let v=0;v<=top+1e-9;v+=ts)o+=`<line x1="${L}" x2="${Wd-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v?'3 3':''}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${fmt(Math.round(v*10)/10)}</text>`;
+  H.forEach((h,i)=>{const bx=L+i*bw+bw*.14,w=bw*.72,v=vals[i],lb=String(h).padStart(2,'0')+':00',cx=bx+w/2;
+    o+=`<rect class="b" x="${bx}" y="${y(v)}" width="${w}" height="${Math.max(0,y(0)-y(v))}" rx="3" fill="var(--brand1)" data-tip="<b>${lb} – ${String(h).padStart(2,'0')}:59</b><br>${whMode==='med'?'Mediana':'Promedio'}: ${v.toFixed(1).replace('.',',')} min<br>${fmt(W.hr[h].en)} turnos en esta hora"/>`+
+       `<text transform="translate(${cx+3} ${Ht-B+8}) rotate(-90)" text-anchor="end">${lb}</text>`});
+  el.innerHTML=o+'</svg>';
+  $('#whN').textContent=om.length?`Se omiten las horas con menos de ${MINH} turnos (${om.map(h=>String(h).padStart(2,'0')+':00').join(', ')}: ${fmt(om.reduce((s,h)=>s+W.hr[h].en,0))} turnos), porque pocos turnos con esperas muy largas distorsionan el resultado.`:'';
+}
+$('#whM').onclick=()=>{whMode='med';render()};$('#whA').onclick=()=>{whMode='avg';render()};
 function resumenWait(ps){
   const W=waitStats(ps),hideIds=['chWD','chWH','chWDist','hbTop'];
   if(!W){$('#kpis2').innerHTML='<div class="card" style="grid-column:1/-1"><p class="note" style="margin:0">Los tiempos de espera y atención se calculan con el reporte de turnos cargado por la Dirección.</p></div>';$('#cTipo').hidden=true;hideIds.forEach(i=>$('#'+i).closest('.card').hidden=true);return}
@@ -660,7 +679,7 @@ function resumenWait(ps){
   $('#tTipoN').textContent=`Clasificación por la abreviatura del turno (GNRAL-1, PRIOR-1…). Espera: últimos 10 días del periodo (${dmy(d10[0])} – ${dmy(d10[d10.length-1])}) y periodo completo. Sin domingos ni festivos.`;
   const idx=W.nonN,lab=idx.map(i=>dLab(G.dates[i]));
   lineSvg($('#chWD'),lab,[{name:'Espera',color:'--bad',data:idx.map(i=>W.day[i].en?W.day[i].es/W.day[i].en:null)},{name:'Atención',color:'--ok',data:idx.map(i=>W.day[i].an?W.day[i].as/W.day[i].an:null)}],Math.max(1,Math.ceil(idx.length/14)));
-  const hs=HRS.filter(h=>W.hr[h].en);barsSvg($('#chWH'),hs.map(h=>String(h).padStart(2,'0')+':00'),hs.map(h=>W.hr[h].es/W.hr[h].en),'--brand1','min de espera promedio');
+  hourBars(W);
   barsSvg($('#chWDist'),['≤ 5 min','5–15','15–30','30–60','1–2 h','> 2 h'],W.dist.map(v=>W.nEsp?100*v/W.nEsp:0),'--brand2','',v=>v.toFixed(1).replace('.',',')+' % de los turnos');
   const top=ps.filter(p=>p.tot>=50&&p.esp!=null).sort((x,y)=>y.esp-x.esp).slice(0,10),mx=Math.max(1,...top.map(p=>p.esp));
   $('#hbTop').innerHTML=top.map(p=>`<div class="r"><span class="t" title="${p.nombre}">${p.bod} ${cap(p.mun.trim())}</span><div class="bar2"><i style="width:${p.esp/mx*100}%;background:var(${p.esp>=45?'--bad':p.esp>=20?'--spor':'--ok'})"></i></div><b class="num">${fmtMin(p.esp)}</b></div>`).join('')||'<p class="note">Sin puntos con suficientes turnos</p>';
