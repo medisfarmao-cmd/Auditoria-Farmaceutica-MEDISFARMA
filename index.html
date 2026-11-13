@@ -1209,16 +1209,45 @@ function ensureReviewFields(a){
 
 let lastAuditsFetchAt = 0;
 const AUDITS_FETCH_MIN_INTERVAL_MS = 30000; // evita re-descargar TODAS las actas (con fotos) si ya se trajeron hace menos de 30s, p.ej. al cambiar rápido entre Control/Hallazgos/Notificaciones
+let AUD_READY = false; // true tras la primera carga: a partir de ahí, una acta "Enviada" nueva dispara aviso al administrador
+function avisoApp(html){
+  let el = document.getElementById("avisoApp");
+  if(!el){
+    el = document.createElement("div"); el.id = "avisoApp";
+    el.style.cssText = "position:fixed;top:14px;right:14px;z-index:9999;max-width:380px;background:#fff;border:2px solid #85c226;border-left-width:8px;border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:13px;";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = html + `<div style="text-align:right;margin-top:6px;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('avisoApp').remove()">Cerrar</button></div>`;
+}
+/* Mezcla actas livianas en la caché. Devuelve las que acaban de pasar a "Enviada" (nuevas por revisar). */
+function mergeRemoteAudits(remote){
+  const nuevas = [];
+  remote.forEach(r=>{
+    if(r._updatedAt && r._updatedAt > AUD_SINCE) AUD_SINCE = r._updatedAt;
+    const i = DB.audits.findIndex(x=>x.id===r.id);
+    const prev = i>=0 ? DB.audits[i] : null;
+    if(prev && current && current.id===r.id) return; // no pisar el acta que se está editando
+    const igual = prev && !prev._lite && prev.estadoRevision===r.estadoRevision && prev.enviadaAt===r.enviadaAt && prev.revisadaAt===r.revisadaAt;
+    if(igual) return; // la copia completa en memoria sigue vigente
+    if(i>=0) DB.audits[i] = r; else DB.audits.push(r);
+    if(r.estadoRevision==="Enviada" && (!prev || prev.estadoRevision!=="Enviada")) nuevas.push(r);
+  });
+  return nuevas;
+}
 async function refreshAuditsFromStorage(opts){
   if(!hasStorage) return; // sin almacenamiento compartido no hay nada que traer de otra sesión
   const force = !!(opts && opts.force);
   if(!force && (Date.now() - lastAuditsFetchAt) < AUDITS_FETCH_MIN_INTERVAL_MS) return;
-  const remote = await loadAuditsFromStorage();
+  const incremental = !!AUD_SINCE && !(opts && opts.full);
+  const remote = await loadAuditsFromStorage(incremental ? AUD_SINCE : "");
+  if(remote===null) return; // falló la consulta: se conserva lo que ya hay en memoria
   lastAuditsFetchAt = Date.now();
-  const map = {};
-  DB.audits.forEach(a=>map[a.id]=a);
-  remote.forEach(a=>map[a.id]=a); // lo remoto es más reciente para los ids que ya existen
-  DB.audits = Object.values(map);
+  const nuevas = mergeRemoteAudits(remote);
+  if(AUD_READY && nuevas.length && SESSION && SESSION.role==="admin"){
+    const n = nuevas[0];
+    avisoApp(`<strong>📥 ${nuevas.length>1 ? nuevas.length+" actas nuevas por revisar" : "Nueva acta por revisar"}</strong><br>${esc(n.header.establecimientoNombre||n.header.nombre||"Punto")} · acta N° ${esc(n.header.acta||"s/n")}${nuevas.length>1?" y otras":""}<br><button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="document.getElementById('avisoApp').remove();App.showMain('notificaciones')">Ir a revisar</button>`);
+  }
+  AUD_READY = true;
 }
 
 let current = null; // audit being edited
@@ -1230,17 +1259,66 @@ function listAudits(){
   return [...DB.audits].sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
 }
 
-async function loadAuditsFromStorage(){
+/* ---- Actas: la lista se carga LIVIANA (sin fotos ni firmas); el acta completa se descarga solo al abrirla ---- */
+let AUDIT_LOAD = {error:null, fallidas:0, total:0};
+let AUD_SINCE = ""; // updated_at más reciente ya visto (para traer solo lo nuevo en los refrescos)
+const AUDIT_LITE_SELECT = "key,updated_at,id:value->>id,createdAt:value->>createdAt,horaInicio:value->>horaInicio,horaFin:value->>horaFin,header:value->header,ratings:value->ratings,obs:value->obs,estadoRevision:value->>estadoRevision,enviadaAt:value->>enviadaAt,revisadaPor:value->>revisadaPor,revisadaAt:value->>revisadaAt,comentarioRevision:value->>comentarioRevision,ubicacionAuditoria:value->ubicacionAuditoria";
+function liteToAudit(row){
+  if(!row || !row.id) return null;
+  const a = {
+    id: row.id, createdAt: row.createdAt||"", horaInicio: row.horaInicio||"", horaFin: row.horaFin||"",
+    ubicacionAuditoria: row.ubicacionAuditoria||null, header: row.header||{}, ratings: row.ratings||{}, obs: row.obs||{},
+    estadoRevision: row.estadoRevision||"Borrador", enviadaAt: row.enviadaAt||"", revisadaPor: row.revisadaPor||"", revisadaAt: row.revisadaAt||"", comentarioRevision: row.comentarioRevision||"",
+    fotos:{}, fotosExtra:[], _lite:true, _updatedAt: row.updated_at||""
+  };
+  ensureSignatures(a);
+  return ensureReviewFields(a);
+}
+/* since: solo actas modificadas después de esa marca (refresco incremental). Devuelve null si falla la consulta. */
+async function loadAuditsFromStorage(since){
   if(!hasStorage) return [];
+  AUDIT_LOAD = {error:null, fallidas:0, total:0};
   try{
-    const { data, error } = await supabaseClient.from("app_data").select("value").like("key", STORAGE_PREFIX + "%");
-    if(error) throw error;
-    if(!data) return [];
-    return data.map(row => ensureReviewFields(row.value)).filter(Boolean);
-  }catch(e){ console.error("Error cargando auditorías:", e); return []; }
+    const out = [];
+    for(let from=0; ; from+=100){
+      let q = supabaseClient.from("app_data").select(AUDIT_LITE_SELECT).like("key", STORAGE_PREFIX + "%");
+      if(since) q = q.gt("updated_at", since);
+      const { data, error } = await q.order("updated_at", {ascending:false}).range(from, from+99);
+      if(error) throw error;
+      (data||[]).forEach(r=>{ const a = liteToAudit(r); if(a) out.push(a); });
+      if(!data || data.length<100) break;
+    }
+    AUDIT_LOAD.total = out.length;
+    return out;
+  }catch(e){ console.error("Error cargando auditorías:", e); AUDIT_LOAD.error = e; return null; }
+}
+/* Descarga el acta completa (fotos, firmas) de UNA sola acta y la deja en la caché. */
+async function ensureFullAudit(id){
+  let a = DB.audits.find(x=>x.id===id);
+  if(a && !a._lite) return a;
+  if(!hasStorage) return a || null;
+  for(let t=0;t<3;t++){
+    try{
+      const { data, error } = await supabaseClient.from("app_data").select("value").eq("key", STORAGE_PREFIX + id).maybeSingle();
+      if(error) throw error;
+      if(!data || !data.value) return a || null;
+      const full = ensureReviewFields(data.value);
+      const i = DB.audits.findIndex(x=>x.id===id);
+      if(i>=0) DB.audits[i] = full; else DB.audits.push(full);
+      return full;
+    }catch(e){ console.error("No se pudo descargar el acta completa", id, e); await new Promise(r=>setTimeout(r, 600*(t+1))); }
+  }
+  alert("No se pudo descargar el acta (puede ser pesada o hay un problema de conexión). Inténtalo de nuevo en unos segundos.");
+  return null;
 }
 
 async function saveAudit(a){
+  if(a._lite){ // acta liviana: jamás se guarda tal cual (borraría fotos y firmas); se descarga la completa y se le aplican los cambios
+    const full = await ensureFullAudit(a.id);
+    if(!full || full._lite){ console.error("No se guardó: no se pudo descargar el acta completa", a.id); return false; }
+    const { fotos, fotosExtra, signatures, _lite, _updatedAt, ...rest } = a;
+    Object.assign(full, rest); a = full;
+  }
   ensureReviewFields(a);
   const idx = DB.audits.findIndex(x=>x.id===a.id);
   if(idx>=0) DB.audits[idx] = a; else DB.audits.push(a);
@@ -1622,7 +1700,7 @@ async function loadAllDB(level){
       loadMaster(MASTER_KEYS.documentos, false),
       loadMaster(MASTER_KEYS.equipos, false),
     ]);
-    DB.audits = audits;
+    if(audits!==null){ DB.audits = []; AUD_SINCE = ""; mergeRemoteAudits(audits); AUD_READY = true; }
     DB.documentos = documentos;
     DB.equipos = equipos;
     lastAuditsFetchAt = Date.now();
@@ -1648,7 +1726,17 @@ async function addNotificacion({mensaje, forRole, forSupervisorId, accion, icono
     leida: false,
     createdAt: new Date().toISOString()
   };
+  // Antes de guardar se trae lo que haya en la nube y se mezcla: si dos personas generan avisos casi a la vez, no se pisan.
+  try{
+    const remoto = await loadMaster(MASTER_KEYS.notificaciones, false);
+    if(Array.isArray(remoto)){
+      const map = {}; remoto.forEach(x=>map[x.id]=x);
+      DB.notificaciones.forEach(x=>{ map[x.id] = map[x.id] ? Object.assign({}, map[x.id], {leida: !!(map[x.id].leida || x.leida)}) : x; });
+      DB.notificaciones = Object.values(map);
+    }
+  }catch(_){}
   DB.notificaciones.unshift(n);
+  DB.notificaciones.sort((a,b)=> String(b.createdAt).localeCompare(String(a.createdAt)));
   if(DB.notificaciones.length > 300) DB.notificaciones = DB.notificaciones.slice(0, 300);
   await saveMaster(MASTER_KEYS.notificaciones, DB.notificaciones);
   return n;
@@ -3516,6 +3604,7 @@ async function refreshCurrentView(level){
   if(Date.now() - lastUserActivity < RECENT_ACTIVITY_GRACE_MS) return; // interacción muy reciente: no interrumpir
 
   await loadAllDB(level || "light");
+  if(SESSION.role!=="punto"){ try{ await refreshAuditsFromStorage({force:true}); }catch(_){} } // incremental y liviano: trae solo actas nuevas/cambiadas
 
   if(isUserTyping()) return; // por si el foco cambió mientras cargaba
 
@@ -3728,8 +3817,9 @@ async function renderLanding(){
   if(SESSION && SESSION.role==="supervisor"){
     audits = audits.filter(a=>a.header.supervisorId===SESSION.id);
   }
+  const avisoCarga = (AUDIT_LOAD.error || AUDIT_LOAD.fallidas) ? `<div style="background:#fef3c7;border:1px solid #d97706;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;"><strong>⚠️ No se pudieron cargar todas las actas.</strong> ${AUDIT_LOAD.error ? "Falló la conexión con el almacenamiento." : AUDIT_LOAD.fallidas+" de "+AUDIT_LOAD.total+" acta(s) no se pudieron descargar (probablemente por su tamaño)."} <button class="btn btn-ghost btn-sm" onclick="refreshAuditsFromStorage({force:true}).then(renderLanding)">Reintentar</button></div>` : "";
   if(audits.length===0){
-    list.innerHTML = `<div class="empty-state">
+    list.innerHTML = avisoCarga + `<div class="empty-state">
       <p style="font-weight:700;margin-bottom:4px;">Aún no hay auditorías guardadas</p>
       <p style="font-size:13px;">Crea una nueva auditoría para diligenciar el acta FR-AT-260 en línea.</p>
     </div>`;
@@ -3738,7 +3828,7 @@ async function renderLanding(){
     }
     return;
   }
-  list.innerHTML = "";
+  list.innerHTML = avisoCarga;
   audits.forEach(a=>{
     const ov = overallScore(a.ratings);
     const done = ratedItemsCount(a.ratings);
@@ -4590,7 +4680,14 @@ const ActaFlow = {
       current.revisadaPor = "";
       current.revisadaAt = "";
       current.comentarioRevision = "";
-      await saveAudit(current);
+      const okEnvio = await saveAudit(current);
+      if(okEnvio===false && hasStorage){ alert("No se pudo guardar el acta en la nube. Revisa tu conexión y vuelve a enviarla."); current.estadoRevision="Borrador"; return; }
+      try{
+        await addNotificacion({
+          mensaje: `${supervisorNombre(current.header.supervisorId)||"Un supervisor"} envió para revisión el acta de auditoría del punto ${current.header.establecimientoNombre||"—"} (acta N° ${current.header.acta||"s/n"}).`,
+          forRole: "admin", accion: {tipo:"acta", auditId: current.id}, icono: "📥"
+        });
+      }catch(e){ console.error("No se pudo notificar al administrador", e); }
       await syncHallazgos();
       ActaFlow.updateStatusUI();
       const findings = DB.hallazgos.filter(x=>x.auditId===current.id);
@@ -4614,8 +4711,7 @@ const ActaFlow = {
 
 const AuditReview = {
   async open(auditId){
-    const audits = await listAudits();
-    const a = audits.find(x=>x.id===auditId);
+    const a = await ensureFullAudit(auditId);
     if(!a) return;
     current = a;
     App.showMain("auditorias");
@@ -4623,8 +4719,7 @@ const AuditReview = {
     App.show("acta");
   },
   async approve(auditId){
-    const audits = await listAudits();
-    const a = audits.find(x=>x.id===auditId);
+    const a = await ensureFullAudit(auditId);
     if(!a) return;
     ensureReviewFields(a);
     a.estadoRevision = "Aprobada";
@@ -4651,8 +4746,7 @@ const AuditReview = {
   async reject(auditId){
     const comentario = prompt("Motivo del rechazo (lo verá el supervisor que envió el acta):", "");
     if(comentario===null) return;
-    const audits = await listAudits();
-    const a = audits.find(x=>x.id===auditId);
+    const a = await ensureFullAudit(auditId);
     if(!a) return;
     ensureReviewFields(a);
     a.estadoRevision = "Rechazada";
@@ -6377,8 +6471,8 @@ const ActaHallazgos = {
 };
 
 const PuntoAudits = {
-  viewActa(auditId){
-    const a = DB.audits.find(x=>x.id===auditId);
+  async viewActa(auditId){
+    const a = await ensureFullAudit(auditId);
     if(!a) return;
     current = a;
     document.getElementById("section-punto").classList.add("hidden");
@@ -8483,8 +8577,7 @@ const App = {
   },
   async openAudit(id){
     this.showMain("auditorias");
-    const audits = await listAudits();
-    const a = audits.find(x=>x.id===id);
+    const a = await ensureFullAudit(id);
     if(a){ current = a; renderForm(); this.show("form"); }
   },
   async backToLanding(){
